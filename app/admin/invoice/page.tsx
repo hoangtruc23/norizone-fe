@@ -64,8 +64,8 @@ export default function InvoiceManagement() {
     // Bộ lọc dữ liệu theo ô tìm kiếm và hình thức thanh toán
     const filteredInvoices = invoices.filter(inv => {
         const matchSearch =
-            inv.bookingId.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            inv.bookingId.customerPhone.includes(searchTerm) ||
+            inv.bookingId?.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            inv.bookingId?.customerPhone.includes(searchTerm) ||
             inv._id.toLowerCase().includes(searchTerm.toLowerCase());
 
         const matchMethod = filterMethod === "all" || inv.paymentMethod === filterMethod;
@@ -202,17 +202,17 @@ export default function InvoiceManagement() {
 
                                                 {/* Khách hàng */}
                                                 <td className="py-4 px-6">
-                                                    <div className="font-semibold text-slate-900">{inv.bookingId.customerName}</div>
-                                                    <div className="text-[11px] text-slate-400 font-mono mt-0.5">{inv.bookingId.customerPhone}</div>
+                                                    <div className="font-semibold text-slate-900">{inv.bookingId?.customerName}</div>
+                                                    <div className="text-[11px] text-slate-400 font-mono mt-0.5">{inv.bookingId?.customerPhone}</div>
                                                 </td>
 
                                                 {/* Phòng */}
                                                 <td className="py-4 px-6">
                                                     <span className="inline-block px-2 py-0.5 rounded bg-slate-100 font-bold text-slate-700 border border-slate-200">
-                                                        {inv.bookingId.roomId.roomNumber}
+                                                        {inv.bookingId?.roomId.roomNumber}
                                                     </span>
                                                     <div className="text-[10px] text-indigo-600 font-semibold tracking-wider uppercase mt-0.5">
-                                                        {inv.bookingId.roomId.type}
+                                                        {inv.bookingId?.roomId.type}
                                                     </div>
                                                 </td>
 

@@ -12,11 +12,21 @@ import { roomService } from "@/app/services/roomService";
 import { menuService } from "@/app/services/menuService";
 import { invoiceService } from "@/app/services/invoiceService"; // Thêm invoiceService
 
-// interface BookingItem {
-//     name: string;
-//     quantity: number;
-//     priceAtOrder: number;
-// }
+// itemId có thể là string (chưa populate) hoặc object đã populate từ backend
+type PopulatedMenuRef = { _id: string; name: string; price: number; category?: string };
+
+interface ServiceItem {
+    itemId: string | PopulatedMenuRef;
+    quantity: number;
+}
+
+// Giá phòng có thể là số cố định (vd: Nintendo 25000/h)
+// hoặc chia theo khung giờ sáng/chiều/tối (vd: Box S/M)
+type ShiftRates = { morning: number; afternoon: number; evening: number };
+type RoomRate = number | ShiftRates;
+
+const isShiftRates = (rate: RoomRate | undefined): rate is ShiftRates =>
+    typeof rate === "object" && rate !== null;
 
 interface Booking {
     _id: string;
@@ -28,9 +38,9 @@ interface Booking {
     checkinTime: string;
     checkoutTime: string;
     status: "pending" | "confirmed" | "checkin" | "completed" | "cancelled";
-    orderedItems?: [];
+    orderedItems?: ServiceItem[];
     amount?: number;
-    roomId?: { _id: string; roomNumber: string; type: string; pricePerHour?: number };
+    roomId?: { _id: string; roomNumber: string; type: string; pricePerHour?: RoomRate };
 }
 
 interface RoomOption {
@@ -77,6 +87,58 @@ const parseTimeToMinutes = (value: string) => {
     return (hour || 0) * 60 + (minute || 0);
 };
 
+// itemId có thể là string id hoặc object đã populate -> luôn lấy ra string id thuần
+const getItemIdStr = (itemId: string | PopulatedMenuRef): string =>
+    typeof itemId === "string" ? itemId : itemId?._id;
+
+// ── Khung giờ tính tiền theo phút trong ngày ──
+// Sáng: 08:00–13:00 | Chiều: 13:00–18:00 | Tối: 18:00–23:00
+// Ngoài khung (23:00–08:00, ngoài giờ mở cửa) mặc định tính theo giá Tối.
+const SHIFT_START = 8 * 60;
+const SHIFT_BOUNDARIES = [8 * 60, 13 * 60, 18 * 60, 23 * 60]; // 08:00, 13:00, 18:00, 23:00
+
+const getRateAtMinute = (absoluteMinute: number, rates: ShiftRates): number => {
+    const m = ((absoluteMinute % 1440) + 1440) % 1440;
+    if (m >= 8 * 60 && m < 13 * 60) return rates.morning;
+    if (m >= 13 * 60 && m < 18 * 60) return rates.afternoon;
+    return rates.evening; // 18:00–23:00 và ngoài giờ mở cửa (23:00–08:00)
+};
+
+// Cộng dồn tiền phòng theo từng đoạn thời gian nằm trong các khung giờ khác nhau
+const calculateRoomCharge = (startMinutes: number, durationMinutes: number, rate: RoomRate | undefined): number => {
+    if (durationMinutes <= 0 || rate === undefined) return 0;
+
+    // Giá cố định theo giờ (vd: máy Nintendo) -> tính đơn giản
+    if (!isShiftRates(rate)) {
+        return Math.round((durationMinutes / 60) * rate);
+    }
+
+    let charge = 0;
+    let cursor = startMinutes;
+    const end = startMinutes + durationMinutes;
+
+    while (cursor < end) {
+        const dayOffset = Math.floor(cursor / 1440) * 1440;
+        const minuteOfDay = cursor - dayOffset;
+        const nextBoundary = SHIFT_BOUNDARIES.find(b => b > minuteOfDay);
+        const nextAbsolute = nextBoundary !== undefined ? dayOffset + nextBoundary : dayOffset + 1440 + SHIFT_START;
+        const segmentEnd = Math.min(end, nextAbsolute);
+        const segmentMinutes = segmentEnd - cursor;
+        const segRate = getRateAtMinute(cursor, rate);
+        charge += (segmentMinutes / 60) * segRate;
+        cursor = segmentEnd;
+    }
+    return Math.round(charge);
+};
+
+// Hiển thị đơn giá hiện hành dạng text, dùng cho phần ghi chú trong modal checkout
+const formatRoomRateLabel = (rate: RoomRate | undefined, atMinute: number): string => {
+    if (rate === undefined) return formatCurrency(0) + "/h";
+    if (!isShiftRates(rate)) return `${formatCurrency(rate)}/h`;
+    const current = getRateAtMinute(atMinute, rate);
+    return `${formatCurrency(current)}/h (hiện tại)`;
+};
+
 export default function AdminDashboard() {
     const router = useRouter();
     const [bookings, setBookings] = useState<Booking[]>([]);
@@ -84,7 +146,9 @@ export default function AdminDashboard() {
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
     const [loading, setLoading] = useState(false);
     const [toast, setToast] = useState<{ type: "ok" | "err"; text: string } | null>(null);
-
+    // Thêm vào dưới đoạn state: const [serviceModal, setServiceModal] = useState...
+    const [expandedServices, setExpandedServices] = useState<Record<string, boolean>>({});
+    const [deleteConfirm, setDeleteConfirm] = useState<{ bookingId: string; itemId: string; itemName: string } | null>(null);
     // Modal tạo booking
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [submitLoading, setSubmitLoading] = useState(false);
@@ -115,6 +179,15 @@ export default function AdminDashboard() {
         setTimeout(() => setToast(null), 3500);
     };
 
+    // Tra cứu thông tin menu item (tên, giá) từ itemId, vì booking chỉ lưu itemId + quantity
+    const getMenuItem = (itemId: string | PopulatedMenuRef): MenuItem | undefined => {
+        if (itemId && typeof itemId === "object") {
+            // Đã populate sẵn từ backend -> dùng luôn, không cần tra cứu trong menuItems
+            return { _id: itemId._id, name: itemId.name, price: itemId.price, category: itemId.category };
+        }
+        return menuItems.find(m => m._id === itemId);
+    };
+
     const formatDuration = (booking: Booking) => {
         const startMinutes = parseTimeToMinutes(booking.checkinTime || booking.startTime);
         const currentMinutes = now.getHours() * 60 + now.getMinutes();
@@ -131,12 +204,16 @@ export default function AdminDashboard() {
         let diffMinutes = currentMinutes - startMinutes;
         if (diffMinutes < 0) diffMinutes += 24 * 60;
 
-        const actualHours = Number((diffMinutes / 60).toFixed(2));
-        const roomRate = booking.roomId?.pricePerHour || 0;
-        const roomCharge = Math.round(actualHours * roomRate);
-        const serviceCharge = (booking.orderedItems || []).reduce(
-            (total, item) => total + item.quantity * item.priceAtOrder, 0
-        );
+        // Tính số giờ thực tế với 2 chữ số thập phân, cắt dư để không làm tròn lên
+        const actualHours = Math.floor((diffMinutes / 60) * 100) / 100;
+
+        const roomCharge = calculateRoomCharge(startMinutes, diffMinutes, booking.roomId?.pricePerHour);
+
+        const serviceCharge = (booking.orderedItems || []).reduce((total, item) => {
+            const menuItem = getMenuItem(item.itemId);
+            return total + (item.quantity || 0) * (menuItem?.price || 0);
+        }, 0);
+
         const totalAmount = roomCharge + serviceCharge;
         return { actualHours, roomCharge, serviceCharge, totalAmount };
     };
@@ -186,12 +263,22 @@ export default function AdminDashboard() {
         const checkoutTime = `${String(now_.getHours()).padStart(2, "0")}:${String(now_.getMinutes()).padStart(2, "0")}`;
 
         try {
-            // 1. Tạo invoice
+            // 1. Tạo invoice — chuẩn hoá orderedItems về itemId dạng string + đính kèm giá tại thời điểm thanh toán
+            const normalizedItems = (booking.orderedItems || []).map(item => {
+                const menuItem = getMenuItem(item.itemId);
+                return {
+                    itemId: getItemIdStr(item.itemId),
+                    quantity: item.quantity,
+                    name: menuItem?.name,
+                    priceAtOrder: menuItem?.price || 0,
+                };
+            });
+
             const invoicePayload = {
                 bookingId: booking._id,
                 actualHours,
                 roomCharge,
-                orderedItems: booking.orderedItems || [],
+                orderedItems: normalizedItems,
                 serviceCharge,
                 discountAmount,
                 totalAmount: finalTotal,
@@ -286,39 +373,49 @@ export default function AdminDashboard() {
         } finally { setSubmitLoading(false); }
     };
 
+    // Thêm dịch vụ vào booking — luôn lưu theo itemId (đúng schema backend),
+    // gộp số lượng nếu item đã tồn tại trong đơn
     const handleAddFromServiceModal = async (bookingId: string) => {
         const currentBooking = bookings.find(b => b._id === bookingId);
         if (!currentBooking) return;
-        const existingItems = currentBooking.orderedItems || [];
-        let updatedItems = [...existingItems];
+        const existingItems = [...(currentBooking.orderedItems || [])];
+
         for (const menuItem of menuItems) {
             const qty = serviceQuantities[menuItem._id] || 0;
             if (qty <= 0) continue;
-            const existingIndex = updatedItems.findIndex(i => i.name === menuItem.name);
+            const existingIndex = existingItems.findIndex(i => getItemIdStr(i.itemId) === menuItem._id);
             if (existingIndex >= 0) {
-                updatedItems[existingIndex] = { ...updatedItems[existingIndex], quantity: updatedItems[existingIndex].quantity + qty };
+                existingItems[existingIndex] = {
+                    ...existingItems[existingIndex],
+                    quantity: existingItems[existingIndex].quantity + qty,
+                };
             } else {
-                updatedItems.push({ name: menuItem.name, quantity: qty, priceAtOrder: menuItem.price });
+                existingItems.push({ itemId: menuItem._id, quantity: qty });
             }
         }
-        setBookings(prev => prev.map(b => b._id === bookingId ? { ...b, orderedItems: updatedItems } : b));
+
+        setBookings(prev => prev.map(b => b._id === bookingId ? { ...b, orderedItems: existingItems } : b));
         try {
-            await bookingService.update(bookingId, { orderedItems: updatedItems });
+            await bookingService.update(bookingId, { orderedItems: existingItems });
             showToast("ok", "Đã thêm dịch vụ vào đơn!");
-        } catch { showToast("ok", "Đã lưu dịch vụ cục bộ!"); }
+        } catch {
+            showToast("ok", "Đã lưu dịch vụ cục bộ!");
+        }
         setServiceQuantities({});
         setServiceModal(null);
     };
 
-    const handleRemoveOrderItem = async (id: string, itemName: string) => {
-        const currentBooking = bookings.find(b => b._id === id);
+    const handleRemoveOrderItem = async (bookingId: string, itemId: string) => {
+        const currentBooking = bookings.find(b => b._id === bookingId);
         if (!currentBooking) return;
-        const updatedItems = (currentBooking.orderedItems || []).filter(item => item.name !== itemName);
-        setBookings(prev => prev.map(b => b._id === id ? { ...b, orderedItems: updatedItems } : b));
+        const updatedItems = (currentBooking.orderedItems || []).filter(item => getItemIdStr(item.itemId) !== itemId);
+        setBookings(prev => prev.map(b => b._id === bookingId ? { ...b, orderedItems: updatedItems } : b));
         try {
-            await bookingService.update(id, { orderedItems: updatedItems });
-            showToast("ok", `Đã xóa ${itemName}`);
-        } catch { showToast("ok", `Đã xóa ${itemName} cục bộ`); }
+            await bookingService.update(bookingId, { orderedItems: updatedItems });
+            showToast("ok", "Đã xóa dịch vụ");
+        } catch {
+            showToast("ok", "Đã xóa dịch vụ cục bộ");
+        }
     };
 
     const handleUpdateStatus = async (id: string, newStatus: string) => {
@@ -368,13 +465,6 @@ export default function AdminDashboard() {
                             <RefreshCw size={14} className={`text-slate-500 ${loading ? "animate-spin text-indigo-600" : ""}`} />
                             Đồng bộ dữ liệu
                         </button>
-                        <button
-                            onClick={() => { authService.logout(); router.replace("/admin/login"); }}
-                            className="px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition-all"
-                        >
-                            Đăng xuất
-                        </button>
-                        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-xs ring-4 ring-indigo-50">A</div>
                     </div>
                 </header>
 
@@ -468,19 +558,62 @@ export default function AdminDashboard() {
                                                                     <span className="font-mono tracking-wider">{formatDuration(b)}</span>
                                                                 </div>
                                                                 <div className="text-[11px] text-slate-400 pl-1">Vào lúc: {b.checkinTime || b.startTime}</div>
-                                                                {b.orderedItems && b.orderedItems.length > 0 && (
+                                                                {/* {b.orderedItems && b.orderedItems.length > 0 && (
                                                                     <div className="flex flex-wrap gap-1 mt-1">
-                                                                        {b.orderedItems.map((item) => (
-                                                                            <button
-                                                                                key={`${b._id}-${item.name}`}
-                                                                                type="button"
-                                                                                onClick={() => handleRemoveOrderItem(b._id, item.name)}
-                                                                                className="rounded-full border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-700 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 transition"
-                                                                                title="Bấm để xoá"
-                                                                            >
-                                                                                {item.name} x{item.quantity} ×
-                                                                            </button>
-                                                                        ))}
+                                                                        {b.orderedItems.map((item) => {
+                                                                            const menuItem = getMenuItem(item.itemId);
+                                                                            const idStr = getItemIdStr(item.itemId);
+                                                                            return (
+                                                                                <button
+                                                                                    key={`${b._id}-${idStr}`}
+                                                                                    type="button"
+                                                                                    onClick={() => handleRemoveOrderItem(b._id, idStr)}
+                                                                                    className="rounded-full border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-700 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 transition"
+                                                                                    title="Bấm để xoá"
+                                                                                >
+                                                                                    {menuItem?.name || "Dịch vụ"} x{item.quantity}
+                                                                                </button>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                )} */}
+
+                                                                {b.orderedItems && b.orderedItems.length > 0 && (
+                                                                    <div className="mt-2 pl-1">
+                                                                        {/* Nút bấm để Toggle đóng/mở danh sách dịch vụ */}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setExpandedServices(prev => ({ ...prev, [b._id]: !prev[b._id] }))}
+                                                                            className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 bg-indigo-50 px-2 py-0.5 rounded-sm border border-indigo-100 transition"
+                                                                        >
+                                                                            {expandedServices[b._id] ? "▼ Ẩn bớt dịch vụ" : `▶ Xem dịch vụ (${b.orderedItems.length})`}
+                                                                        </button>
+
+                                                                        {/* Nội dung list dịch vụ hiển thị khi được mở */}
+                                                                        {expandedServices[b._id] && (
+                                                                            <div className="flex flex-wrap gap-1 mt-1.5 p-1.5 bg-slate-50 rounded-lg border border-slate-100 max-w-xs animate-in fade-in duration-150">
+                                                                                {b.orderedItems.map((item) => {
+                                                                                    const menuItem = getMenuItem(item.itemId);
+                                                                                    const idStr = getItemIdStr(item.itemId);
+                                                                                    return (
+                                                                                        <button
+                                                                                            key={`${b._id}-${idStr}`}
+                                                                                            type="button"
+                                                                                            onClick={() => setDeleteConfirm({
+                                                                                                bookingId: b._id,
+                                                                                                itemId: idStr,
+                                                                                                itemName: menuItem?.name || "Dịch vụ"
+                                                                                            })}
+                                                                                            className="rounded-full border border-indigo-100 bg-white px-2 py-0.5 text-[10px] font-medium text-indigo-700 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 transition flex items-center gap-1 shadow-xs"
+                                                                                            title="Bấm để xoá"
+                                                                                        >
+                                                                                            {menuItem?.name || "Dịch vụ"} x{item.quantity}
+                                                                                            <span className="text-slate-300 group-hover:text-rose-400 font-bold ml-0.5">×</span>
+                                                                                        </button>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -693,6 +826,46 @@ export default function AdminDashboard() {
             )}
 
             {/* ══════════════════════════════════════
+                DIALOG XÁC NHẬN XÓA DỊCH VỤ
+            ══════════════════════════════════════ */}
+            {deleteConfirm && (
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+                    <div className="bg-white border border-slate-200 rounded-xl shadow-xl max-w-sm w-full p-5 animate-in zoom-in-95 duration-150">
+                        <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                                <XCircle size={18} />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-900">Xác nhận hủy dịch vụ</h3>
+                                <p className="text-xs text-slate-500 mt-1">
+                                    Bạn có chắc chắn muốn xóa dịch vụ <span className="font-bold text-slate-800">{deleteConfirm.itemName}</span> ra khỏi phòng này không?
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-2 justify-end mt-4 pt-3 border-t border-slate-100">
+                            <button
+                                type="button"
+                                onClick={() => setDeleteConfirm(null)}
+                                className="px-3.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
+                            >
+                                Hủy bỏ
+                            </button>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    await handleRemoveOrderItem(deleteConfirm.bookingId, deleteConfirm.itemId);
+                                    setDeleteConfirm(null);
+                                }}
+                                className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs"
+                            >
+                                Đồng ý xóa
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ══════════════════════════════════════
                 MODAL TÍNH TIỀN (CHECKOUT)
             ══════════════════════════════════════ */}
             {checkoutModal && (
@@ -700,7 +873,7 @@ export default function AdminDashboard() {
                     <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
 
                         {/* Header */}
-                        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-emerald-50 to-white">
+                        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-linear-to-r from-emerald-50 to-white">
                             <div className="flex items-center gap-3">
                                 <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center">
                                     <Receipt size={18} className="text-emerald-600" />
@@ -737,7 +910,9 @@ export default function AdminDashboard() {
                                     <span className="font-bold text-indigo-600">{checkoutModal.actualHours.toFixed(2)} giờ</span>
                                 </div>
                                 <div className="flex justify-between items-center text-xs">
-                                    <span className="text-slate-500">Tiền phòng ({formatCurrency(checkoutModal.booking.roomId?.pricePerHour || 0)}/h)</span>
+                                    <span className="text-slate-500">
+                                        Tiền phòng ({formatRoomRateLabel(checkoutModal.booking.roomId?.pricePerHour, now.getHours() * 60 + now.getMinutes())})
+                                    </span>
                                     <span className="font-semibold text-slate-800">{formatCurrency(checkoutModal.roomCharge)}</span>
                                 </div>
                             </div>
@@ -749,17 +924,20 @@ export default function AdminDashboard() {
                                     <p className="text-xs text-slate-400 italic text-center py-2">Không có dịch vụ nào</p>
                                 ) : (
                                     <div className="space-y-1.5">
-                                        {checkoutModal.booking.orderedItems.map((item, idx) => (
-                                            <div key={idx} className="flex justify-between items-center text-xs">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold shrink-0">
-                                                        {item.quantity}
-                                                    </span>
-                                                    <span className="text-slate-700 font-medium">{item.name}</span>
+                                        {checkoutModal.booking.orderedItems.map((item, idx) => {
+                                            const menuItem = getMenuItem(item.itemId);
+                                            return (
+                                                <div key={idx} className="flex justify-between items-center text-xs">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold shrink-0">
+                                                            {item.quantity}
+                                                        </span>
+                                                        <span className="text-slate-700 font-medium">{menuItem?.name || "Dịch vụ"}</span>
+                                                    </div>
+                                                    <span className="font-semibold text-slate-800">{formatCurrency(item.quantity * (menuItem?.price || 0))}</span>
                                                 </div>
-                                                <span className="font-semibold text-slate-800">{formatCurrency(item.quantity * item.priceAtOrder)}</span>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                         <div className="flex justify-between items-center text-xs border-t border-slate-200 pt-2 mt-1">
                                             <span className="text-slate-500">Tổng dịch vụ</span>
                                             <span className="font-semibold text-slate-800">{formatCurrency(checkoutModal.serviceCharge)}</span>
@@ -867,7 +1045,7 @@ export default function AdminDashboard() {
                             <button
                                 onClick={handleConfirmCheckout}
                                 disabled={checkoutLoading}
-                                className="flex-[2] py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm"
+                                className="flex-2 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm"
                             >
                                 {checkoutLoading ? (
                                     <><RefreshCw size={13} className="animate-spin" /> Đang xử lý...</>

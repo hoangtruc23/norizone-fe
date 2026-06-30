@@ -1,7 +1,12 @@
-import React from 'react';
+"use client"
+import React, { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function NoriZonePage() {
+  // Trạng thái quản lý ẩn/hiện của Dialog bảng giá
+  const [isOpenPriceModal, setIsOpenPriceModal] = useState(false);
+
   return (
     <div className="relative w-full min-h-screen text-white overflow-x-hidden font-sans">
       <style dangerouslySetInnerHTML={{
@@ -211,7 +216,8 @@ export default function NoriZonePage() {
           </div>
           <nav style={{ display: 'flex', gap: 28, fontSize: 13, fontWeight: 500, opacity: 0.85, letterSpacing: '0.04em' }}>
             <span style={{ cursor: 'pointer' }}>Dịch vụ</span>
-            <span style={{ cursor: 'pointer' }}>Bảng giá</span>
+            {/* Thêm sự kiện onClick để bật bảng giá ngay trên Menu */}
+            <span style={{ cursor: 'pointer' }} onClick={() => setIsOpenPriceModal(true)}>Bảng giá</span>
             <span style={{ cursor: 'pointer' }}>Liên hệ</span>
           </nav>
         </header>
@@ -282,7 +288,8 @@ export default function NoriZonePage() {
                     </svg>
                   </button>
                 </Link>
-                <button className="ghost-btn">
+                {/* Thêm sự kiện mở Dialog tại đây */}
+                <button className="ghost-btn" onClick={() => setIsOpenPriceModal(true)}>
                   Xem bảng giá
                 </button>
               </div>
@@ -342,6 +349,52 @@ export default function NoriZonePage() {
           <span>📍 Đức Trọng - Lâm Đồng</span>
         </footer>
       </div>
+
+      {/* ======================================================== */}
+      {/* DIALOG BẢNG GIÁ POPUP (Chỉ hiển thị khi isOpenPriceModal = true) */}
+      {/* ======================================================== */}
+      {isOpenPriceModal && (
+        <div
+          className="fixed inset-0 flex items-center justify-center p-4 backdrop-blur-md"
+          style={{
+            zIndex: 100,
+            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+          onClick={() => setIsOpenPriceModal(false)} // Bấm ra ngoài nền đen để tắt modal
+        >
+          {/* Card chứa ảnh */}
+          <div
+            className="relative w-full max-w-3xl rounded-2xl border border-white/20 p-2 overflow-hidden card animate-scaleUp"
+            onClick={(e) => e.stopPropagation()} // Ngăn chặn sự kiện đóng khi click vào trong ảnh
+          >
+            {/* Nút đóng (X) */}
+            <button
+              className="absolute top-4 right-4 z-50 flex items-center justify-center w-9 height-9 rounded-full bg-black/50 text-white hover:bg-white hover:text-black transition-colors border border-white/20"
+              style={{ width: '36px', height: '36px', cursor: 'pointer' }}
+              onClick={() => setIsOpenPriceModal(false)}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+
+            {/* Nội dung ảnh bảng giá */}
+            <div className="w-full flex justify-center items-center">
+              <Image
+                src="/images/nori-banggia.png"
+                alt="bang-gia"
+                width={1200}
+                height={800}
+                className="w-full h-auto object-contain rounded-xl"
+                style={{ maxHeight: '80vh' }} // Giới hạn chiều cao ảnh tối đa 80% màn hình thiết bị
+                priority
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

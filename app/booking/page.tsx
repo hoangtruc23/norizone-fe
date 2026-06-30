@@ -1,8 +1,9 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
-import { Calendar, Clock, MapPin, Users, Ticket, HelpCircle, Mail, ChevronDown, Phone, ClipboardList } from "lucide-react";
+import { Calendar, Clock, MapPin, Users, Ticket, HelpCircle, Mail, ChevronDown, Phone, ClipboardList, ArrowLeft } from "lucide-react";
 import { bookingService } from "@/app/services/bookingService";
 import Image from "next/image";
+import Link from "next/link";
 
 // Hàm tự động sinh danh sách các mốc giờ cách nhau 15 phút (từ 09:00 đến 23:45)
 const generateTimeSlots = () => {
@@ -53,7 +54,7 @@ export default function BookingPage() {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    // Cấu hình dữ liệu giá chuẩn theo đúng Model Mongoose khớp với ảnh "nori-banggia.jpg"
+    // Cấu hình dữ liệu giá chuẩn theo đúng Model Mongoose khớp với ảnh "nori-banggia.png"
     const priceMatrix: Record<string, { morning: number; afternoon: number; evening: number }> = {
         boxS: {
             morning: 39000,   // Khung sáng (8h - 13h)
@@ -162,8 +163,11 @@ export default function BookingPage() {
 
                     <div className="relative z-10 space-y-6">
                         <div>
+                            <Link href="/" className="flex gap-2 mb-3">
+                                <ArrowLeft /> Trở về trang chủ
+                            </Link>
                             <span className="text-xs font-bold uppercase tracking-widest bg-white/20 px-3 py-1 rounded-full text-white">
-                                NORI Zone Entertainment
+                                Music Box & Nintendo
                             </span>
                             <h1 className="text-4xl font-black tracking-tight mt-4 drop-shadow-sm">
                                 NORI ZONE
@@ -287,7 +291,7 @@ export default function BookingPage() {
                                         >
                                             <option value="boxS">BOX S (1-3 người)</option>
                                             <option value="boxM">BOX M (4-8 người)</option>
-                                            <option value="nintendo">Chơi Nintendo Switch</option>
+                                            <option value="nintendo">Nintendo Switch ( thêm tay cầm + 25k )</option>
                                         </select>
                                         <ChevronDown size={14} className="absolute right-3 top-4 text-slate-400 pointer-events-none" />
                                     </div>
@@ -366,14 +370,14 @@ export default function BookingPage() {
                             <div className="mt-8 pt-5 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
                                 <div className="text-center sm:text-left">
                                     <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Số tiền cần thanh toán (Tạm tính)</p>
-                                    <p className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-600">
+                                    <p className="text-3xl font-black text-transparent bg-clip-text bg-linear-to-r from-purple-600 to-pink-600">
                                         {calculatePrice()} VND
                                     </p>
                                 </div>
                                 <button
                                     type="submit"
                                     disabled={loading}
-                                    className={`w-full sm:w-auto bg-gradient-to-r from-blue-600 to-blue-400 text-white font-bold px-10 py-4 rounded-xl text-sm transition shadow-xl shadow-purple-200/80 ${loading ? "opacity-50 cursor-not-allowed" : "hover:opacity-95 active:scale-[0.98]"}`}
+                                    className={`w-full sm:w-auto bg-linear-to-r from-blue-600 to-blue-400 text-white font-bold px-10 py-4 rounded-xl text-sm transition shadow-xl shadow-purple-200/80 ${loading ? "opacity-50 cursor-not-allowed" : "hover:opacity-95 active:scale-[0.98]"}`}
                                 >
                                     {loading ? "Đang gửi lịch..." : "Tiến hành Đặt Phòng"}
                                 </button>
@@ -386,9 +390,9 @@ export default function BookingPage() {
                         <div className="space-y-4 flex-1 flex flex-col justify-between animate-in fade-in duration-200">
                             <div className="w-full overflow-hidden border border-slate-100 rounded-xl bg-slate-50 p-2 flex items-center justify-center">
                                 <Image
-                                    src="/images/nori-banggia.jpg"
+                                    src="/images/nori-banggia.png"
                                     alt="bang-gia"
-                                    className="w-full h-auto object-contain max-h-105"
+                                    className="w-full h-auto object-contain max-h-105 rounded-xl"
                                     width={1200}
                                     height={600}
                                     priority
