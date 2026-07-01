@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
     CheckCircle, XCircle, LogIn, RefreshCw, Plus, X,
-    Zap, Calendar, Clock, Phone, Timer,
+    Zap, Calendar, Clock, Phone, Timer, ChevronRight,
     Receipt, CreditCard, Banknote, Wallet, ChevronDown, Search
 } from "lucide-react";
 import { bookingService } from "@/app/services/bookingService";
@@ -125,21 +125,19 @@ const formatRoomRateLabel = (rate: RoomRate | undefined, atMinute: number): stri
     return `${formatCurrency(current)}/h`;
 };
 
-// Lấy 1-2 ký tự đầu của tên khách để làm avatar chữ cái
 const getInitials = (name: string) => {
     if (!name) return "?";
     const parts = name.trim().split(/\s+/);
     return parts[parts.length - 1]?.[0]?.toUpperCase() || "?";
 };
 
-// Handle kéo trên cùng bottom sheet — tín hiệu thị giác chuyên nghiệp cho modal trượt lên
 const SheetHandle = () => (
     <div className="flex justify-center pt-2.5 pb-1 shrink-0">
         <div className="w-9 h-1.5 rounded-full bg-slate-200" />
     </div>
 );
 
-export default function AdminDashboardMobile() {
+export default function AdminDashboard() {
     const router = useRouter();
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [rooms, setRooms] = useState<RoomOption[]>([]);
@@ -148,6 +146,8 @@ export default function AdminDashboardMobile() {
     const [toast, setToast] = useState<{ type: "ok" | "err"; text: string } | null>(null);
     const [expandedServices, setExpandedServices] = useState<Record<string, boolean>>({});
     const [deleteConfirm, setDeleteConfirm] = useState<{ bookingId: string; itemId: string; itemName: string } | null>(null);
+
+    // Modals & Sheets
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [submitLoading, setSubmitLoading] = useState(false);
     const [newBooking, setNewBooking] = useState({
@@ -168,9 +168,10 @@ export default function AdminDashboardMobile() {
     const [paymentMethod, setPaymentMethod] = useState<"cash" | "banking" | "momo">("cash");
     const [checkoutLoading, setCheckoutLoading] = useState(false);
 
+    // Filters & Search
     const [statusFilter, setStatusFilter] = useState<"all" | Booking["status"]>("all");
     const [searchQuery, setSearchQuery] = useState("");
-    const [searchOpen, setSearchOpen] = useState(false);
+    const [searchOpen, setSearchOpen] = useState(false); // Dành riêng cho Mobile toggle
 
     const [now, setNow] = useState(new Date());
 
@@ -418,10 +419,6 @@ export default function AdminDashboardMobile() {
         (sum, item) => sum + (serviceQuantities[item._id] || 0) * item.price, 0
     );
 
-    const finalTotal = checkoutModal
-        ? Math.max(0, checkoutModal.totalBeforeDiscount - discountAmount)
-        : 0;
-
     const visibleBookings = bookings
         .filter(b => statusFilter === "all" || b.status === statusFilter)
         .filter(b => {
@@ -440,332 +437,412 @@ export default function AdminDashboardMobile() {
     ];
 
     return (
-        <div className="min-h-screen bg-slate-50 text-slate-800 font-sans antialiased selection:bg-indigo-500/10 pb-28">
+        <div className="min-h-screen bg-slate-50 text-slate-800 font-sans antialiased selection:bg-indigo-500/10">
 
-            {/* ── HEADER ── */}
-            <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
-                <div className="px-4 h-14 flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                        <h1 className="text-sm font-bold text-slate-900 leading-tight truncate">Quản lý đặt phòng</h1>
-                        <p className="text-[10px] text-slate-400 leading-tight">
-                            Cập nhật lúc {String(now.getHours()).padStart(2, "0")}:{String(now.getMinutes()).padStart(2, "0")}
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                        <button
-                            onClick={() => setSearchOpen(v => !v)}
-                            className={`p-2.5 rounded-lg border transition-all active:scale-95 shadow-sm ${searchOpen ? "border-indigo-300 bg-indigo-50 text-indigo-600" : "border-slate-200 bg-white text-slate-500"}`}
-                        >
-                            <Search size={15} />
-                        </button>
-                        <button
-                            onClick={fetchBookings}
-                            className="p-2.5 rounded-lg border border-slate-200 bg-white active:scale-95 transition-all shadow-sm"
-                        >
-                            <RefreshCw size={15} className={`text-slate-500 ${loading ? "animate-spin text-indigo-600" : ""}`} />
-                        </button>
-                    </div>
-                </div>
-                {searchOpen && (
-                    <div className="px-4 pb-3 animate-in slide-in-from-top-2 fade-in duration-150">
-                        <div className="relative">
-                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                            <input
-                                autoFocus
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Tìm theo tên hoặc số điện thoại..."
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-8 py-2.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition"
-                            />
-                            {searchQuery && (
-                                <button onClick={() => setSearchQuery("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400">
-                                    <X size={13} />
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </header>
-
-            {/* ── TOAST ── */}
+            {/* TOAST NOTIFICATION */}
             {toast && (
-                <div className="fixed top-16 left-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border bg-white border-emerald-200 text-emerald-800 animate-in fade-in slide-in-from-top-4 duration-200">
+                <div className="fixed top-16 md:top-6 right-4 left-4 md:left-auto md:right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border bg-white border-emerald-200 text-emerald-800 animate-in fade-in slide-in-from-top-4 duration-200">
                     <div className="w-5 h-5 rounded-md bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0"><Zap size={12} /></div>
                     <span className="text-xs font-semibold">{toast.text}</span>
                 </div>
             )}
 
-            {/* ── MAIN ── */}
-            <main className="px-4 pt-4 space-y-4">
-
-                {/* Stats — 3 ô compact trong 1 hàng, quét nhanh bằng mắt */}
-                <div className="grid grid-cols-3 gap-2.5">
-                    {[
-                        { label: "Chờ duyệt", value: pendingCount, bar: "bg-amber-500", tint: "bg-amber-50 text-amber-700" },
-                        { label: "Đang dùng", value: checkinCount, bar: "bg-purple-500", tint: "bg-purple-50 text-purple-700" },
-                        { label: "Đã xong", value: completedCount, bar: "bg-emerald-500", tint: "bg-emerald-50 text-emerald-700" },
-                    ].map(({ label, value, bar, tint }) => (
-                        <div key={label} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                            <div className={`h-1 ${bar}`} />
-                            <div className="p-2.5">
-                                <div className="text-xl font-extrabold tracking-tight text-slate-900">{value}</div>
-                                <div className={`text-[10px] font-semibold mt-1 inline-block px-1.5 py-0.5 rounded ${tint}`}>{label}</div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Filter tabs — pill, cuộn ngang, có số lượng */}
-                <div className="flex gap-1.5 overflow-x-auto pb-3 -mx-4 px-4 scrollbar-hide">
-                    {FILTER_TABS.map(tab => (
-                        <button
-                            key={tab.key}
-                            onClick={() => setStatusFilter(tab.key)}
-                            className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 ${statusFilter === tab.key
-                                ? "bg-slate-900 text-white border-slate-900 shadow-sm"
-                                : "bg-white text-slate-600 border-slate-200"
-                                }`}
-                        >
-                            {tab.label}
-                            <span className={`text-[10px] rounded-full px-1.5 py-0.5 font-bold ${statusFilter === tab.key ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
-                                {tab.count}
-                            </span>
-                        </button>
-                    ))}
-                </div>
-
-                {/* Danh sách booking */}
-                <div className="space-y-2.5">
-                    <div className="flex items-center justify-between px-0.5">
-                        <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                            {visibleBookings.length} kết quả
-                        </h2>
+            {/* ═════════════════════════════════════════════════════════════
+                1. INTERFACE CHO DESKTOP (md:flex / md:block)
+            ═════════════════════════════════════════════════════════════ */}
+            <div className="hidden md:flex flex-col min-w-0 w-full">
+                {/* Desktop Header */}
+                <header className="bg-white border-b border-slate-200 px-8 h-16 flex items-center justify-between sticky top-0 z-40">
+                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <span className="font-medium text-slate-600">NORI Workspace</span>
+                        <ChevronRight size={14} className="text-slate-300" />
+                        <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 font-medium">
+                            Điều phối phòng máy
+                        </span>
                     </div>
 
-                    {visibleBookings.length === 0 ? (
-                        <div className="bg-white border border-dashed border-slate-300 rounded-xl py-14 text-center">
-                            <p className="text-slate-400 font-medium text-xs">Không tìm thấy lịch đặt phù hợp.</p>
+                    <div className="flex items-center gap-3">
+                        <div className="relative w-64">
+                            <Search size={14} className="absolute left-3 top-3 text-slate-400" />
+                            <input
+                                type="text"
+                                placeholder="Tìm tên khách, số điện thoại..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition"
+                            />
                         </div>
-                    ) : (
-                        visibleBookings.map((b) => {
-                            const config = STATUS_MAP[b.status] ?? STATUS_MAP.cancelled;
-                            return (
-                                <div key={b._id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                                    {/* Dải màu trạng thái bên trái — quét nhanh không cần đọc chữ */}
-                                    <div className="flex">
-                                        <div className={`w-1 shrink-0 ${config.solid}`} />
-                                        <div className="flex-1 p-3.5 space-y-3 min-w-0">
+                        <button onClick={fetchBookings} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition shadow-sm active:scale-95">
+                            <RefreshCw size={14} className={`text-slate-500 ${loading ? "animate-spin text-indigo-600" : ""}`} />
+                            Đồng bộ
+                        </button>
+                        <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-sm active:scale-95">
+                            <Plus size={14} /> Thêm lịch đặt
+                        </button>
+                    </div>
+                </header>
 
-                                            {/* Hàng trên: avatar + tên + trạng thái */}
-                                            <div className="flex items-start justify-between gap-2">
-                                                <div className="flex items-center gap-2.5 min-w-0">
-                                                    <div className="w-9 h-9 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-sm shrink-0">
-                                                        {getInitials(b.customerName)}
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <div className="font-bold text-slate-900 text-sm truncate">{b.customerName}</div>
-                                                        <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
-                                                            <Phone size={10} className="shrink-0" /> {b.customerPhone}
+                {/* Desktop Main Content */}
+                <main className="p-8 max-w-full w-full mx-auto space-y-6">
+                    {/* Desktop Counter Stats Grid */}
+                    <div className="grid grid-cols-3 gap-5">
+                        {[
+                            { label: "Đơn chờ duyệt", value: pendingCount, desc: "Cần xử lý phê duyệt", bar: "bg-amber-500" },
+                            { label: "Khách đang dùng", value: checkinCount, desc: "Phòng đang hoạt động", bar: "bg-purple-500" },
+                            { label: "Đã xong hôm nay", value: completedCount, desc: "Kết toán thành công", bar: "bg-emerald-500" },
+                        ].map(({ label, value, desc, bar }) => (
+                            <div key={label} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex flex-col justify-between">
+                                <div className={`h-1.5 ${bar}`} />
+                                <div className="p-5 flex items-center justify-between">
+                                    <div>
+                                        <div className="text-xs font-medium text-slate-400 tracking-wider uppercase">{label}</div>
+                                        <div className="text-3xl font-extrabold text-slate-900 mt-1 tracking-tight">{value}</div>
+                                        <div className="text-xs text-slate-400 mt-1 font-normal">{desc}</div>
+                                    </div>
+                                    <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center font-bold text-slate-400">#</div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Desktop Controller Filter Bar */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-2 flex items-center justify-between shadow-sm">
+                        <div className="flex items-center gap-1">
+                            {FILTER_TABS.map(tab => (
+                                <button
+                                    key={tab.key}
+                                    onClick={() => setStatusFilter(tab.key)}
+                                    className={`px-4 py-2 rounded-lg text-xs font-bold transition ${statusFilter === tab.key ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"}`}
+                                >
+                                    {tab.label}
+                                    <span className={`ml-1.5 text-[11px] font-mono font-bold px-1.5 py-0.5 rounded-md ${statusFilter === tab.key ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
+                                        {tab.count}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Desktop Main Table */}
+                    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                        <th className="py-3.5 px-6">Khách hàng</th>
+                                        <th className="py-3.5 px-6">Phòng máy</th>
+                                        <th className="py-3.5 px-6">Khung thời gian</th>
+                                        <th className="py-3.5 px-6">Trạng thái</th>
+                                        <th className="py-3.5 px-6 text-right">Chức năng</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                                    {visibleBookings.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={5} className="py-16 text-center text-slate-400 font-medium">Hệ thống trống. Không tìm thấy lịch đặt nào phù hợp.</td>
+                                        </tr>
+                                    ) : (
+                                        visibleBookings.map((b) => {
+                                            const config = STATUS_MAP[b.status] ?? STATUS_MAP.cancelled;
+                                            return (
+                                                <tr key={b._id} className="hover:bg-slate-50/70 transition-colors group">
+                                                    <td className="py-4 px-6">
+                                                        <div className="font-bold text-slate-900 text-sm">{b.customerName}</div>
+                                                        <div className="text-[11px] text-slate-400 font-mono mt-0.5 flex items-center gap-1">
+                                                            <Phone size={11} className="text-slate-300" /> {b.customerPhone}
                                                         </div>
-                                                    </div>
-                                                </div>
-                                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold shrink-0 ${config.badge}`}>
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
-                                                    {config.short}
-                                                </span>
-                                            </div>
+                                                    </td>
+                                                    <td className="py-4 px-6">
+                                                        <span className="inline-block px-2.5 py-0.5 rounded bg-slate-100 font-bold text-slate-700 border border-slate-200 text-xs">
+                                                            {b.roomId?.roomNumber || "Chưa xếp"}
+                                                        </span>
+                                                        <div className="text-[10px] text-indigo-600 font-semibold tracking-wider uppercase mt-0.5">
+                                                            {b.roomId?.type || "Standard"}
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-4 px-6">
+                                                        {b.status === "checkin" ? (
+                                                            <div className="space-y-1">
+                                                                <div className="font-bold text-purple-700 font-mono flex items-center gap-1.5 bg-purple-50 px-2 py-1 rounded-md border border-purple-100 w-fit animate-pulse">
+                                                                    <Timer size={13} /> {formatDuration(b)}
+                                                                </div>
+                                                                <div className="text-[11px] text-slate-400 pl-0.5">Vào lúc: {b.checkinTime || b.startTime} · {b.bookingDate}</div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="space-y-0.5 font-medium">
+                                                                <div className="text-slate-800 text-xs font-bold flex items-center gap-1">
+                                                                    <Clock size={12} className="text-slate-400" />
+                                                                    {b.status === "completed" ? `${b.checkinTime} – ${b.checkoutTime || "-"}` : `${b.startTime} – ${b.endTime || "-"}`}
+                                                                </div>
+                                                                <div className="text-[11px] text-slate-400">{b.bookingDate}</div>
+                                                            </div>
+                                                        )}
 
-                                            {/* Info grid: phòng + thời gian, luôn cùng bố cục để dễ so sánh giữa các thẻ */}
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div className="bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-2">
-                                                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Phòng</div>
-                                                    <div className="text-xs font-bold text-slate-900 mt-0.5 truncate">{b.roomId?.roomNumber || "Chưa xếp"}</div>
-                                                    <div className="text-[10px] text-indigo-600 font-medium truncate">{b.roomId?.type || "Standard"}</div>
-                                                </div>
-                                                <div className="bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-2">
-                                                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                                                        <Calendar size={9} /> Ngày
-                                                    </div>
-                                                    <div className="text-xs font-bold text-slate-900 mt-0.5 truncate">{b.bookingDate}</div>
-                                                    <div className="text-[10px] text-slate-500 font-medium truncate">
-                                                        {b.status === "checkin" ? (b.checkinTime || b.startTime)
-                                                            : b.status === "completed" ? `${b.checkinTime}–${b.checkoutTime || "-"}`
-                                                                : `${b.startTime}–${b.endTime || "-"}`}
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Đồng hồ đếm giờ khi đang check-in */}
-                                            {b.status === "checkin" && (
-                                                <div className="flex items-center justify-between bg-purple-50 border border-purple-100 rounded-lg px-2.5 py-2">
-                                                    <div className="flex items-center gap-1.5 text-purple-700">
-                                                        <Timer size={13} />
-                                                        <span className="text-[10px] font-semibold">Thời gian sử dụng</span>
-                                                    </div>
-                                                    <span className="font-mono font-bold text-purple-700 text-xs tabular-nums">{formatDuration(b)}</span>
-                                                </div>
-                                            )}
-
-                                            {/* Dịch vụ */}
-                                            {b.orderedItems && b.orderedItems.length > 0 && (
-                                                <div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setExpandedServices(prev => ({ ...prev, [b._id]: !prev[b._id] }))}
-                                                        className="w-full flex items-center justify-between text-[11px] font-semibold text-slate-600 bg-slate-50 border border-slate-100 px-2.5 py-2 rounded-lg transition active:scale-[0.98]"
-                                                    >
-                                                        <span>Dịch vụ đã gọi ({b.orderedItems.length})</span>
-                                                        <ChevronDown size={13} className={`transition-transform ${expandedServices[b._id] ? "rotate-180" : ""}`} />
-                                                    </button>
-
-                                                    {expandedServices[b._id] && (
-                                                        <div className="flex flex-wrap gap-1.5 mt-2 animate-in fade-in duration-150">
-                                                            {b.orderedItems.map((item) => {
-                                                                const menuItem = getMenuItem(item.itemId);
-                                                                const idStr = getItemIdStr(item.itemId);
-                                                                return (
-                                                                    <button
-                                                                        key={`${b._id}-${idStr}`}
-                                                                        type="button"
-                                                                        onClick={() => setDeleteConfirm({
-                                                                            bookingId: b._id,
-                                                                            itemId: idStr,
-                                                                            itemName: menuItem?.name || "Dịch vụ"
-                                                                        })}
-                                                                        className="rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-[11px] font-medium text-indigo-700 active:bg-rose-50 active:text-rose-700 active:border-rose-200 transition flex items-center gap-1"
-                                                                    >
-                                                                        {menuItem?.name || "Dịch vụ"} ×{item.quantity}
-                                                                        <X size={10} className="opacity-50" />
+                                                        {/* Hiển thị dịch vụ kèm theo trực tiếp trên Table hàng */}
+                                                        {b.status === "checkin" && b.orderedItems && b.orderedItems.length > 0 && (
+                                                            <div className="flex flex-wrap gap-1 mt-2">
+                                                                {b.orderedItems.map((item) => {
+                                                                    const menuItem = getMenuItem(item.itemId);
+                                                                    const idStr = getItemIdStr(item.itemId);
+                                                                    return (
+                                                                        <button
+                                                                            key={idStr}
+                                                                            onClick={() => setDeleteConfirm({ bookingId: b._id, itemId: idStr, itemName: menuItem?.name || "Dịch vụ" })}
+                                                                            className="inline-flex items-center gap-1 rounded bg-slate-50 border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 transition"
+                                                                            title="Nhấn để xoá mặt hàng"
+                                                                        >
+                                                                            {menuItem?.name} x{item.quantity}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td className="py-4 px-6">
+                                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${config.badge}`}>
+                                                            <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
+                                                            {config.label}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-4 px-6 text-right">
+                                                        <div className="flex gap-2 items-center justify-end">
+                                                            {b.status === "pending" && (
+                                                                <button onClick={() => handleUpdateStatus(b._id, "confirmed")} className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-600 font-bold transition shadow-xs">
+                                                                    <CheckCircle size={13} /> Duyệt đơn
+                                                                </button>
+                                                            )}
+                                                            {b.status === "confirmed" && (
+                                                                <button onClick={() => handleUpdateStatus(b._id, "checkin")} className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-600 hover:text-white text-purple-600 font-bold transition shadow-xs">
+                                                                    <LogIn size={13} /> Nhận phòng
+                                                                </button>
+                                                            )}
+                                                            {b.status === "checkin" && (
+                                                                <>
+                                                                    <button onClick={() => openCheckoutModal(b)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-600 hover:text-white text-emerald-600 font-bold transition shadow-xs">
+                                                                        <Receipt size={13} /> Tính tiền
                                                                     </button>
-                                                                );
-                                                            })}
+                                                                    <button onClick={() => { setServiceQuantities({}); setServiceModal({ bookingId: b._id }); }} className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold transition shadow-xs">
+                                                                        <Plus size={13} /> Thêm đồ
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                            {b.status !== "completed" && b.status !== "cancelled" && (
+                                                                <button onClick={() => handleUpdateStatus(b._id, "cancelled")} className="p-1.5 rounded-lg border border-rose-100 bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-600 transition-all" title="Huỷ lịch">
+                                                                    <XCircle size={14} />
+                                                                </button>
+                                                            )}
+                                                            {(b.status === "completed" || b.status === "cancelled") && (
+                                                                <span className="text-slate-400 font-medium italic pr-2 select-none">---</span>
+                                                            )}
                                                         </div>
-                                                    )}
-                                                </div>
-                                            )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </main>
+            </div>
 
-                                            {/* Thao tác */}
-                                            <div className="flex gap-2 pt-1">
-                                                {b.status === "pending" && (
-                                                    <button onClick={() => handleUpdateStatus(b._id, "confirmed")} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-blue-600 active:bg-blue-700 text-white text-xs font-bold transition-all shadow-sm">
-                                                        <CheckCircle size={14} /> Xác nhận
-                                                    </button>
-                                                )}
-                                                {b.status === "confirmed" && (
-                                                    <button onClick={() => handleUpdateStatus(b._id, "checkin")} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-purple-600 active:bg-purple-700 text-white text-xs font-bold transition-all shadow-sm">
-                                                        <LogIn size={13} /> Nhận phòng
-                                                    </button>
-                                                )}
+            {/* ═════════════════════════════════════════════════════════════
+                2. INTERFACE CHO MOBILE - GIỮ NGUYÊN BẢN CŨ CỦA BẠN (md:hidden)
+            ═════════════════════════════════════════════════════════════ */}
+            <div className="md:hidden">
+                {/* Header Mobile */}
+                <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
+                    <div className="px-4 h-14 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                            <h1 className="text-sm font-bold text-slate-900 leading-tight truncate">Quản lý đặt phòng</h1>
+                            <p className="text-[10px] text-slate-400 leading-tight">Cập nhật lúc {String(now.getHours()).padStart(2, "0")}:{String(now.getMinutes()).padStart(2, "0")}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                            <button onClick={() => setSearchOpen(v => !v)} className={`p-2.5 rounded-lg border transition-all active:scale-95 shadow-sm ${searchOpen ? "border-indigo-300 bg-indigo-50 text-indigo-600" : "border-slate-200 bg-white text-slate-500"}`}><Search size={15} /></button>
+                            <button onClick={fetchBookings} className="p-2.5 rounded-lg border border-slate-200 bg-white active:scale-95 transition-all shadow-sm"><RefreshCw size={15} className={`text-slate-500 ${loading ? "animate-spin text-indigo-600" : ""}`} /></button>
+                        </div>
+                    </div>
+                    {searchOpen && (
+                        <div className="px-4 pb-3 animate-in slide-in-from-top-2 fade-in duration-150">
+                            <div className="relative">
+                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input autoFocus type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Tìm theo tên hoặc số điện thoại..." className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-8 py-2.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition" />
+                                {searchQuery && <button onClick={() => setSearchQuery("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400"><X size={13} /></button>}
+                            </div>
+                        </div>
+                    )}
+                </header>
+
+                {/* Mobile Main Content */}
+                <main className="px-4 pt-4 space-y-4">
+                    {/* Stats Mobile */}
+                    <div className="grid grid-cols-3 gap-2.5">
+                        {[
+                            { label: "Chờ duyệt", value: pendingCount, bar: "bg-amber-500", tint: "bg-amber-50 text-amber-700" },
+                            { label: "Đang dùng", value: checkinCount, bar: "bg-purple-500", tint: "bg-purple-50 text-purple-700" },
+                            { label: "Đã xong", value: completedCount, bar: "bg-emerald-500", tint: "bg-emerald-50 text-emerald-700" },
+                        ].map(({ label, value, bar, tint }) => (
+                            <div key={label} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                                <div className={`h-1 ${bar}`} />
+                                <div className="p-2.5">
+                                    <div className="text-xl font-extrabold tracking-tight text-slate-900">{value}</div>
+                                    <div className={`text-[10px] font-semibold mt-1 inline-block px-1.5 py-0.5 rounded ${tint}`}>{label}</div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Filter tabs Mobile */}
+                    <div className="flex gap-1.5 overflow-x-auto pb-3 -mx-4 px-4 scrollbar-hide">
+                        {FILTER_TABS.map(tab => (
+                            <button key={tab.key} onClick={() => setStatusFilter(tab.key)} className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 ${statusFilter === tab.key ? "bg-slate-900 text-white border-slate-900 shadow-sm" : "bg-white text-slate-600 border-slate-200"}`}>
+                                {tab.label} <span className={`text-[10px] rounded-full px-1.5 py-0.5 font-bold ${statusFilter === tab.key ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>{tab.count}</span>
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Mobile Booking List */}
+                    <div className="space-y-2.5">
+                        <div className="flex items-center justify-between px-0.5">
+                            <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{visibleBookings.length} kết quả</h2>
+                        </div>
+                        {visibleBookings.length === 0 ? (
+                            <div className="bg-white border border-dashed border-slate-300 rounded-xl py-14 text-center">
+                                <p className="text-slate-400 font-medium text-xs">Hệ thống trống. Không tìm thấy lịch đặt nào phù hợp.</p>
+                            </div>
+                        ) : (
+                            visibleBookings.map((b) => {
+                                const config = STATUS_MAP[b.status] ?? STATUS_MAP.cancelled;
+                                return (
+                                    <div key={b._id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                                        <div className="flex">
+                                            <div className={`w-1 shrink-0 ${config.solid}`} />
+                                            <div className="flex-1 p-3.5 space-y-3 min-w-0">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="flex items-center gap-2.5 min-w-0">
+                                                        <div className="w-9 h-9 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-sm shrink-0">{getInitials(b.customerName)}</div>
+                                                        <div className="min-w-0">
+                                                            <div className="font-bold text-slate-900 text-sm truncate">{b.customerName}</div>
+                                                            <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5"><Phone size={10} className="shrink-0" /> {b.customerPhone}</div>
+                                                        </div>
+                                                    </div>
+                                                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold shrink-0 ${config.badge}`}><span className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />{config.short}</span>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div className="bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-2">
+                                                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Phòng</div>
+                                                        <div className="text-xs font-bold text-slate-900 mt-0.5 truncate">{b.roomId?.roomNumber || "Chưa xếp"}</div>
+                                                        <div className="text-[10px] text-indigo-600 font-medium truncate">{b.roomId?.type || "Standard"}</div>
+                                                    </div>
+                                                    <div className="bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-2">
+                                                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1"><Calendar size={9} /> Ngày</div>
+                                                        <div className="text-xs font-bold text-slate-900 mt-0.5 truncate">{b.bookingDate}</div>
+                                                        <div className="text-[10px] text-slate-500 font-medium truncate">{b.status === "checkin" ? (b.checkinTime || b.startTime) : b.status === "completed" ? `${b.checkinTime}–${b.checkoutTime || "-"}` : `${b.startTime}–${b.endTime || "-"}`}</div>
+                                                    </div>
+                                                </div>
                                                 {b.status === "checkin" && (
-                                                    <>
-                                                        <button
-                                                            onClick={() => openCheckoutModal(b)}
-                                                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-emerald-600 active:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm"
-                                                        >
-                                                            <Receipt size={13} /> Tính tiền
-                                                        </button>
-                                                        <button
-                                                            onClick={() => { setServiceQuantities({}); setServiceModal({ bookingId: b._id }); }}
-                                                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-slate-200 bg-white active:bg-slate-50 text-slate-700 text-xs font-bold transition-all"
-                                                        >
-                                                            <Plus size={13} /> Dịch vụ
-                                                        </button>
-                                                    </>
-                                                )}
-                                                {b.status !== "completed" && b.status !== "cancelled" && (
-                                                    <button onClick={() => handleUpdateStatus(b._id, "cancelled")} className="py-2.5 px-3.5 rounded-lg border border-rose-200 bg-white active:bg-rose-50 text-rose-600 transition-all" title="Huỷ lịch">
-                                                        <XCircle size={14} />
-                                                    </button>
-                                                )}
-                                                {(b.status === "completed" || b.status === "cancelled") && (
-                                                    <div className="flex-1 text-center text-[11px] text-slate-400 font-medium py-2">
-                                                        {b.status === "completed" ? "Đã thanh toán đầy đủ" : "Lịch đặt đã huỷ"}
+                                                    <div className="flex items-center justify-between bg-purple-50 border border-purple-100 rounded-lg px-2.5 py-2">
+                                                        <div className="flex items-center gap-1.5 text-purple-700"><Timer size={13} /><span className="text-[10px] font-semibold">Thời gian sử dụng</span></div>
+                                                        <span className="font-mono font-bold text-purple-700 text-xs tabular-nums">{formatDuration(b)}</span>
                                                     </div>
                                                 )}
+                                                {b.orderedItems && b.orderedItems.length > 0 && (
+                                                    <div>
+                                                        <button type="button" onClick={() => setExpandedServices(prev => ({ ...prev, [b._id]: !prev[b._id] }))} className="w-full flex items-center justify-between text-[11px] font-semibold text-slate-600 bg-slate-50 border border-slate-100 px-2.5 py-2 rounded-lg transition">
+                                                            <span>Dịch vụ đã gọi ({b.orderedItems.length})</span>
+                                                            <ChevronDown size={13} className={`transition-transform ${expandedServices[b._id] ? "rotate-180" : ""}`} />
+                                                        </button>
+                                                        {expandedServices[b._id] && (
+                                                            <div className="flex flex-wrap gap-1.5 mt-2 animate-in fade-in duration-150">
+                                                                {b.orderedItems.map((item) => {
+                                                                    const menuItem = getMenuItem(item.itemId);
+                                                                    const idStr = getItemIdStr(item.itemId);
+                                                                    return (
+                                                                        <button key={`${b._id}-${idStr}`} type="button" onClick={() => setDeleteConfirm({ bookingId: b._id, itemId: idStr, itemName: menuItem?.name || "Dịch vụ" })} className="rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-[11px] font-medium text-indigo-700 active:bg-rose-50 active:text-rose-700 active:border-rose-200 transition flex items-center gap-1">{menuItem?.name || "Dịch vụ"} ×{item.quantity}<X size={10} className="opacity-50" /></button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                <div className="flex gap-2 pt-1">
+                                                    {b.status === "pending" && <button onClick={() => handleUpdateStatus(b._id, "confirmed")} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-blue-600 text-white text-xs font-bold shadow-sm"><CheckCircle size={14} /> Xác nhận</button>}
+                                                    {b.status === "confirmed" && <button onClick={() => handleUpdateStatus(b._id, "checkin")} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-purple-600 text-white text-xs font-bold shadow-sm"><LogIn size={13} /> Nhận phòng</button>}
+                                                    {b.status === "checkin" && (
+                                                        <>
+                                                            <button onClick={() => openCheckoutModal(b)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-emerald-600 text-white text-xs font-bold shadow-sm"><Receipt size={13} /> Tính tiền</button>
+                                                            <button onClick={() => { setServiceQuantities({}); setServiceModal({ bookingId: b._id }); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs font-bold"> <Plus size={13} /> Dịch vụ</button>
+                                                        </>
+                                                    )}
+                                                    {b.status !== "completed" && b.status !== "cancelled" && <button onClick={() => handleUpdateStatus(b._id, "cancelled")} className="py-2.5 px-3.5 rounded-lg border border-rose-200 bg-white text-rose-600"><XCircle size={14} /></button>}
+                                                    {(b.status === "completed" || b.status === "cancelled") && <div className="flex-1 text-center text-[11px] text-slate-400 font-medium py-2">{b.status === "completed" ? "Đã thanh toán đầy đủ" : "Lịch đặt đã huỷ"}</div>}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            );
-                        })
-                    )}
-                </div>
-            </main>
+                                );
+                            })
+                        )}
+                    </div>
+                </main>
 
-            {/* Nút thêm lịch đặt — nổi cố định, safe-area aware */}
-            <button
-                onClick={() => setIsModalOpen(true)}
-                className="fixed right-4 z-30 flex items-center gap-1.5 px-5 py-3.5 rounded-full bg-indigo-600 active:bg-indigo-700 text-white text-xs font-bold transition-all shadow-lg shadow-indigo-600/30 active:scale-95"
-                style={{ bottom: "max(1.5rem, calc(env(safe-area-inset-bottom) + 1rem))" }}
-            >
-                <Plus size={16} /> Thêm lịch
-            </button>
+                {/* Nút thêm Mobile */}
+                <button onClick={() => setIsModalOpen(true)} className="fixed right-4 z-30 flex items-center gap-1.5 px-5 py-3.5 rounded-full bg-indigo-600 text-white text-xs font-bold shadow-lg shadow-indigo-600/30" style={{ bottom: "max(1.5rem, calc(env(safe-area-inset-bottom) + 1rem))" }}><Plus size={16} /> Thêm lịch</button>
+            </div>
 
-            {/* ══════════════════════════════════════
-                MODAL TẠO BOOKING — bottom sheet
-            ══════════════════════════════════════ */}
+            {/* ═════════════════════════════════════════════════════════════
+                3. POPUP MODALS / BOTTOM SHEETS THAM CHIẾU CHUNG
+            ═════════════════════════════════════════════════════════════ */}
+            {/* [MODAL 1]: TẠO BOOKING (Responsive Bottom-up ở Mobile / Center Card ở Desktop) */}
             {isModalOpen && (
-                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-end justify-center animate-in fade-in duration-200">
-                    <div className="bg-white border-t border-slate-200 rounded-t-2xl shadow-xl w-full max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-200">
-                        <SheetHandle />
-                        <div className="px-4 pb-3 border-b border-slate-100 flex items-center justify-between shrink-0">
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-end md:items-center justify-center animate-in fade-in duration-200 p-0 md:p-4">
+                    <div className="bg-white border border-slate-200 rounded-t-2xl md:rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] md:max-h-[95vh] flex flex-col animate-in slide-in-from-bottom md:zoom-in-95 duration-200">
+                        <div className="md:hidden"><SheetHandle /></div>
+                        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
                             <div>
                                 <h3 className="text-sm font-bold text-slate-900">Thêm lịch đặt phòng mới</h3>
                                 <p className="text-xs text-slate-500 mt-0.5">Tạo đơn đặt máy/phòng cho khách hàng</p>
                             </div>
-                            <button onClick={() => setIsModalOpen(false)} className="p-2 rounded-lg border border-slate-200 bg-white text-slate-400 transition">
+                            <button onClick={() => setIsModalOpen(false)} className="p-2 rounded-lg border border-slate-200 bg-white text-slate-400">
                                 <X size={16} />
                             </button>
                         </div>
-                        <form onSubmit={handleCreateBooking} className="p-4 space-y-4 overflow-y-auto">
-                            <div className="grid grid-cols-1 gap-3.5">
+                        <form onSubmit={handleCreateBooking} className="p-6 space-y-4 overflow-y-auto">
+                            <div className="space-y-3.5">
                                 <div>
                                     <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Tên khách hàng</label>
-                                    <input type="text" required placeholder="Ví dụ: Nguyễn Văn A" value={newBooking.customerName}
-                                        onChange={(e) => setNewBooking(prev => ({ ...prev, customerName: e.target.value }))}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-sm font-medium text-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition" />
+                                    <input type="text" required placeholder="Ví dụ: Nguyễn Văn A" value={newBooking.customerName} onChange={(e) => setNewBooking(prev => ({ ...prev, customerName: e.target.value }))} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition" />
                                 </div>
                                 <div>
                                     <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Số điện thoại</label>
-                                    <input type="tel" required placeholder="Ví dụ: 0901234567" value={newBooking.customerPhone}
-                                        onChange={(e) => setNewBooking(prev => ({ ...prev, customerPhone: e.target.value }))}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-sm font-medium text-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition" />
+                                    <input type="tel" required placeholder="Ví dụ: 0901234567" value={newBooking.customerPhone} onChange={(e) => setNewBooking(prev => ({ ...prev, customerPhone: e.target.value }))} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition" />
                                 </div>
                                 <div>
                                     <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Chỉ định phòng máy</label>
-                                    <select required value={newBooking.roomId} onChange={(e) => setNewBooking(prev => ({ ...prev, roomId: e.target.value }))}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-sm font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition">
+                                    <select required value={newBooking.roomId} onChange={(e) => setNewBooking(prev => ({ ...prev, roomId: e.target.value }))} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition cursor-pointer">
                                         <option value="" disabled>-- Chọn phòng trống --</option>
-                                        {rooms.map((room) => (
-                                            <option key={room._id} value={room._id}>{room.roomNumber} ({room.type})</option>
-                                        ))}
+                                        {rooms.map((room) => <option key={room._id} value={room._id}>{room.roomNumber} ({room.type})</option>)}
                                     </select>
                                 </div>
                                 <div>
                                     <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Ngày đặt phòng</label>
-                                    <input type="date" required value={newBooking.bookingDate}
-                                        onChange={(e) => setNewBooking(prev => ({ ...prev, bookingDate: e.target.value }))}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-sm font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition" />
+                                    <input type="date" required value={newBooking.bookingDate} onChange={(e) => setNewBooking(prev => ({ ...prev, bookingDate: e.target.value }))} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition" />
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Giờ vào dự kiến</label>
-                                        <input type="time" required value={newBooking.startTime}
-                                            onChange={(e) => setNewBooking(prev => ({ ...prev, startTime: e.target.value }))}
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-sm font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition" />
+                                        <input type="time" required value={newBooking.startTime} onChange={(e) => setNewBooking(prev => ({ ...prev, startTime: e.target.value }))} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition" />
                                     </div>
                                     <div>
                                         <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Giờ ra dự kiến</label>
-                                        <input type="time" value={newBooking.endTime}
-                                            onChange={(e) => setNewBooking(prev => ({ ...prev, endTime: e.target.value }))}
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-sm font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition" />
+                                        <input type="time" value={newBooking.endTime} onChange={(e) => setNewBooking(prev => ({ ...prev, endTime: e.target.value }))} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-indigo-500 transition" />
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex gap-2.5 items-center pt-3 border-t border-slate-100 pb-2" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
-                                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-600 transition">Hủy bỏ</button>
-                                <button type="submit" disabled={submitLoading} className="flex-1 py-3 rounded-xl bg-indigo-600 active:bg-indigo-700 disabled:bg-indigo-400 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm">
+                            <div className="flex gap-2.5 items-center pt-4 border-t border-slate-100 sticky bottom-0 bg-white">
+                                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-600 transition">Hủy bỏ</button>
+                                <button type="submit" disabled={submitLoading} className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm">
                                     {submitLoading ? "Đang xử lý..." : "Lưu lịch đặt"}
                                 </button>
                             </div>
@@ -774,19 +851,17 @@ export default function AdminDashboardMobile() {
                 </div>
             )}
 
-            {/* ══════════════════════════════════════
-                MODAL THÊM DỊCH VỤ — bottom sheet
-            ══════════════════════════════════════ */}
+            {/* [MODAL 2]: THÊM DỊCH VỤ */}
             {serviceModal && (
-                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-end justify-center animate-in fade-in duration-200">
-                    <div className="bg-white border-t border-slate-200 rounded-t-2xl shadow-xl w-full max-h-[85vh] flex flex-col animate-in slide-in-from-bottom duration-200">
-                        <SheetHandle />
-                        <div className="px-4 pb-3 border-b border-slate-100 flex items-center justify-between shrink-0">
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-end md:items-center justify-center animate-in fade-in duration-200 p-0 md:p-4">
+                    <div className="bg-white border border-slate-200 rounded-t-2xl md:rounded-2xl shadow-xl w-full max-w-sm max-h-[85vh] md:max-h-[90vh] flex flex-col animate-in slide-in-from-bottom md:zoom-in-95 duration-200">
+                        <div className="md:hidden"><SheetHandle /></div>
+                        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
                             <div>
                                 <h3 className="text-sm font-bold text-slate-900">Thêm dịch vụ</h3>
-                                <p className="text-xs text-slate-500 mt-0.5">Chọn đồ ăn / thức uống cho khách</p>
+                                <p className="text-xs text-slate-500 mt-0.5">Chọn thức uống / đồ ăn</p>
                             </div>
-                            <button onClick={() => { setServiceModal(null); setServiceQuantities({}); }} className="p-2 rounded-lg border border-slate-200 bg-white text-slate-400 transition">
+                            <button onClick={() => { setServiceModal(null); setServiceQuantities({}); }} className="p-2 rounded-lg border border-slate-200 bg-white text-slate-400">
                                 <X size={16} />
                             </button>
                         </div>
@@ -798,134 +873,78 @@ export default function AdminDashboardMobile() {
                                 </div>
                             ) : (
                                 menuItems.map((item) => (
-                                    <div key={item._id} className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl border border-slate-100 bg-slate-50 transition">
+                                    <div key={item._id} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-slate-100 bg-slate-50">
                                         <div className="flex-1 min-w-0">
                                             <div className="text-xs font-semibold text-slate-800 truncate">{item.name}</div>
                                             <div className="text-[11px] text-indigo-600 font-medium mt-0.5">{formatCurrency(item.price)}</div>
-                                            {item.category && <div className="text-[10px] text-slate-400 mt-0.5">{item.category}</div>}
                                         </div>
                                         <div className="flex items-center gap-2 shrink-0">
-                                            <button onClick={() => setServiceQuantities(prev => ({ ...prev, [item._id]: Math.max(0, (prev[item._id] || 0) - 1) }))}
-                                                className="w-8 h-8 rounded-md border border-slate-200 bg-white text-slate-500 active:bg-rose-50 active:text-rose-600 active:border-rose-200 text-base font-bold flex items-center justify-center transition">−</button>
-                                            <span className="w-6 text-center text-xs font-bold text-slate-700 tabular-nums">{serviceQuantities[item._id] || 0}</span>
-                                            <button onClick={() => setServiceQuantities(prev => ({ ...prev, [item._id]: (prev[item._id] || 0) + 1 }))}
-                                                className="w-8 h-8 rounded-md border border-indigo-200 bg-indigo-50 text-indigo-600 active:bg-indigo-600 active:text-white text-base font-bold flex items-center justify-center transition">+</button>
+                                            <button onClick={() => setServiceQuantities(prev => ({ ...prev, [item._id]: Math.max(0, (prev[item._id] || 0) - 1) }))} className="w-7 h-8 rounded-md border border-slate-200 bg-white text-slate-500 text-sm font-bold flex items-center justify-center transition">−</button>
+                                            <span className="w-5 text-center text-xs font-bold text-slate-700 tabular-nums">{serviceQuantities[item._id] || 0}</span>
+                                            <button onClick={() => setServiceQuantities(prev => ({ ...prev, [item._id]: (prev[item._id] || 0) + 1 }))} className="w-7 h-8 rounded-md border border-indigo-200 bg-indigo-50 text-indigo-600 text-sm font-bold flex items-center justify-center transition">+</button>
                                         </div>
                                     </div>
                                 ))
                             )}
                         </div>
-                        <div className="p-4 border-t border-slate-100 bg-slate-50/50 shrink-0" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}>
+                        <div className="p-5 border-t border-slate-100 bg-slate-50/50 shrink-0">
                             <div className="flex items-center justify-between mb-3">
                                 <span className="text-xs text-slate-500 font-medium">Tổng cộng:</span>
                                 <span className="text-sm font-bold text-indigo-700">{formatCurrency(serviceModalTotal)}</span>
                             </div>
                             <div className="flex gap-2">
-                                <button onClick={() => { setServiceModal(null); setServiceQuantities({}); }} className="flex-1 py-3 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-600 transition">Hủy</button>
-                                <button onClick={() => handleAddFromServiceModal(serviceModal.bookingId)} disabled={serviceModalTotal === 0}
-                                    className="flex-1 py-3 rounded-xl bg-indigo-600 active:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white text-xs font-bold transition">
-                                    Xác nhận thêm
-                                </button>
+                                <button onClick={() => { setServiceModal(null); setServiceQuantities({}); }} className="flex-1 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-600">Hủy</button>
+                                <button onClick={() => handleAddFromServiceModal(serviceModal.bookingId)} disabled={serviceModalTotal === 0} className="flex-1 py-2.5 rounded-xl bg-indigo-600 disabled:bg-slate-200 text-white text-xs font-bold shadow-sm">Xác nhận</button>
                             </div>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* ══════════════════════════════════════
-                DIALOG XÁC NHẬN XÓA DỊCH VỤ
-            ══════════════════════════════════════ */}
+            {/* [MODAL 3]: XÁC NHẬN XÓA DỊCH VỤ KÈM PHÒNG */}
             {deleteConfirm && (
                 <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
                     <div className="bg-white border border-slate-200 rounded-xl shadow-xl max-w-sm w-full p-5 animate-in zoom-in-95 duration-150">
                         <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
-                                <XCircle size={18} />
-                            </div>
+                            <div className="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0"><XCircle size={18} /></div>
                             <div>
                                 <h3 className="text-sm font-bold text-slate-900">Xác nhận hủy dịch vụ</h3>
-                                <p className="text-xs text-slate-500 mt-1">
-                                    Bạn có chắc chắn muốn xóa dịch vụ <span className="font-bold text-slate-800">{deleteConfirm.itemName}</span> ra khỏi phòng này không?
-                                </p>
+                                <p className="text-xs text-slate-500 mt-1">Bạn muốn xóa mặt hàng <span className="font-bold text-slate-800">{deleteConfirm.itemName}</span> khỏi hóa đơn phòng chơi này?</p>
                             </div>
                         </div>
                         <div className="flex gap-2 justify-end mt-4 pt-3 border-t border-slate-100">
-                            <button
-                                type="button"
-                                onClick={() => setDeleteConfirm(null)}
-                                className="px-3.5 py-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 transition"
-                            >
-                                Hủy bỏ
-                            </button>
-                            <button
-                                type="button"
-                                onClick={async () => {
-                                    await handleRemoveOrderItem(deleteConfirm.bookingId, deleteConfirm.itemId);
-                                    setDeleteConfirm(null);
-                                }}
-                                className="px-3.5 py-2 rounded-lg bg-rose-600 active:bg-rose-700 text-white text-xs font-bold transition shadow-xs"
-                            >
-                                Đồng ý xóa
-                            </button>
+                            <button type="button" onClick={() => setDeleteConfirm(null)} className="px-3.5 py-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600">Hủy bỏ</button>
+                            <button type="button" onClick={async () => { await handleRemoveOrderItem(deleteConfirm.bookingId, deleteConfirm.itemId); setDeleteConfirm(null); }} className="px-3.5 py-2 rounded-lg bg-rose-600 text-white text-xs font-bold">Đồng ý xóa</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* ══════════════════════════════════════
-                MODAL TÍNH TIỀN (CHECKOUT) — bottom sheet
-            ══════════════════════════════════════ */}
+            {/* [MODAL 4]: XÁC NHẬN TÍNH TIỀN (CHECKOUT) */}
             {checkoutModal && (
-                <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-end justify-center animate-in fade-in duration-200">
-                    <div className="bg-white border-t border-slate-200 rounded-t-2xl shadow-2xl w-full max-h-[92vh] flex flex-col animate-in slide-in-from-bottom duration-200">
-                        <SheetHandle />
-
-                        {/* Header */}
-                        <div className="px-4 pb-3 border-b border-slate-100 flex items-center justify-between bg-linear-to-r from-emerald-50 to-white shrink-0">
+                <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-end md:items-center justify-center animate-in fade-in duration-200 p-0 md:p-4">
+                    <div className="bg-white border border-slate-200 rounded-t-2xl md:rounded-2xl shadow-2xl w-full max-w-md max-h-[92vh] md:max-h-[95vh] flex flex-col animate-in slide-in-from-bottom md:zoom-in-95 duration-200">
+                        <div className="md:hidden"><SheetHandle /></div>
+                        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-linear-to-r from-emerald-50 to-white shrink-0">
                             <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
-                                    <Receipt size={18} className="text-emerald-600" />
-                                </div>
+                                <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0"><Receipt size={18} className="text-emerald-600" /></div>
                                 <div className="min-w-0">
                                     <h3 className="text-sm font-bold text-slate-900">Hoá đơn thanh toán</h3>
-                                    <p className="text-xs text-slate-500 mt-0.5 truncate">
-                                        {checkoutModal.booking.customerName} · {checkoutModal.booking.roomId?.roomNumber || "---"}
-                                    </p>
+                                    <p className="text-xs text-slate-500 mt-0.5 truncate">{checkoutModal.booking.customerName} · {checkoutModal.booking.roomId?.roomNumber || "---"}</p>
                                 </div>
                             </div>
-                            <button onClick={closeCheckoutModal} className="p-2 rounded-lg border border-slate-200 bg-white text-slate-400 transition shrink-0">
-                                <X size={16} />
-                            </button>
+                            <button onClick={closeCheckoutModal} className="p-2 rounded-lg border border-slate-200 bg-white text-slate-400 shrink-0"><X size={16} /></button>
                         </div>
 
-                        <div className="p-4 space-y-4 overflow-y-auto flex-1">
-
-                            {/* ── Thông tin thời gian ── */}
+                        <div className="p-6 space-y-4 overflow-y-auto flex-1">
                             <div className="rounded-xl border border-slate-100 bg-slate-50 p-3.5 space-y-2">
                                 <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Thời gian sử dụng</div>
-                                <div className="flex justify-between items-center text-xs">
-                                    <span className="text-slate-500">Giờ vào</span>
-                                    <span className="font-semibold text-slate-800">{checkoutModal.booking.checkinTime || checkoutModal.booking.startTime}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-xs">
-                                    <span className="text-slate-500">Giờ ra (hiện tại)</span>
-                                    <span className="font-semibold text-slate-800">
-                                        {String(now.getHours()).padStart(2, "0")}:{String(now.getMinutes()).padStart(2, "0")}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between items-center text-xs border-t border-slate-200 pt-2 mt-1">
-                                    <span className="text-slate-500">Số giờ thực tế</span>
-                                    <span className="font-bold text-indigo-600">{checkoutModal.actualHours.toFixed(2)} giờ</span>
-                                </div>
-                                <div className="flex justify-between items-center text-xs">
-                                    <span className="text-slate-500">
-                                        Tiền phòng ({formatRoomRateLabel(checkoutModal.booking.roomId?.pricePerHour, now.getHours() * 60 + now.getMinutes())})
-                                    </span>
-                                    <span className="font-semibold text-slate-800">{formatCurrency(checkoutModal.roomCharge)}</span>
-                                </div>
+                                <div className="flex justify-between items-center text-xs"><span className="text-slate-500">Giờ vào</span><span className="font-semibold text-slate-800">{checkoutModal.booking.checkinTime || checkoutModal.booking.startTime}</span></div>
+                                <div className="flex justify-between items-center text-xs"><span className="text-slate-500">Giờ ra (hiện tại)</span><span className="font-semibold text-slate-800">{String(now.getHours()).padStart(2, "0")}:{String(now.getMinutes()).padStart(2, "0")}</span></div>
+                                <div className="flex justify-between items-center text-xs border-t border-slate-200 pt-2 mt-1"><span className="text-slate-500">Số giờ thực tế</span><span className="font-bold text-indigo-600">{checkoutModal.actualHours.toFixed(2)} giờ</span></div>
+                                <div className="flex justify-between items-center text-xs"><span className="text-slate-500">Tiền phòng ({formatRoomRateLabel(checkoutModal.booking.roomId?.pricePerHour, now.getHours() * 60 + now.getMinutes())})</span><span className="font-semibold text-slate-800">{formatCurrency(checkoutModal.roomCharge)}</span></div>
                             </div>
 
-                            {/* ── Dịch vụ đã dùng ── */}
                             <div className="rounded-xl border border-slate-100 bg-slate-50 p-3.5">
                                 <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">Dịch vụ đã gọi</div>
                                 {(!checkoutModal.booking.orderedItems || checkoutModal.booking.orderedItems.length === 0) ? (
@@ -937,133 +956,60 @@ export default function AdminDashboardMobile() {
                                             return (
                                                 <div key={idx} className="flex justify-between items-center text-xs">
                                                     <div className="flex items-center gap-2 min-w-0">
-                                                        <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold shrink-0">
-                                                            {item.quantity}
-                                                        </span>
+                                                        <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold shrink-0">{item.quantity}</span>
                                                         <span className="text-slate-700 font-medium truncate">{menuItem?.name || "Dịch vụ"}</span>
                                                     </div>
                                                     <span className="font-semibold text-slate-800 shrink-0">{formatCurrency(item.quantity * (menuItem?.price || 0))}</span>
                                                 </div>
                                             );
                                         })}
-                                        <div className="flex justify-between items-center text-xs border-t border-slate-200 pt-2 mt-1">
-                                            <span className="text-slate-500">Tổng dịch vụ</span>
-                                            <span className="font-semibold text-slate-800">{formatCurrency(checkoutModal.serviceCharge)}</span>
-                                        </div>
+                                        <div className="flex justify-between items-center text-xs border-t border-slate-200 pt-2 mt-1"><span className="text-slate-500">Tổng dịch vụ</span><span className="font-semibold text-slate-800">{formatCurrency(checkoutModal.serviceCharge)}</span></div>
                                     </div>
                                 )}
                             </div>
 
-                            {/* ── Ô nhập Discount ── */}
                             <div className="rounded-xl border border-amber-100 bg-amber-50/60 p-3.5 space-y-2.5">
                                 <div className="text-[11px] font-bold text-amber-700 uppercase tracking-wider">Mã giảm giá / Ưu đãi</div>
                                 <div className="relative">
-                                    <input
-                                        type="text"
-                                        inputMode="numeric"
-                                        placeholder="Nhập số tiền giảm (VD: 50000)"
-                                        value={discountInput}
-                                        onChange={(e) => handleDiscountInput(e.target.value)}
-                                        className="w-full bg-white border border-amber-200 rounded-xl px-3 py-3 text-sm font-medium text-slate-700 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/10 transition pr-8"
-                                    />
-                                    {discountAmount > 0 && (
-                                        <button
-                                            onClick={() => { setDiscountAmount(0); setDiscountInput(""); }}
-                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 transition"
-                                        >
-                                            <X size={14} />
-                                        </button>
-                                    )}
+                                    <input type="text" inputMode="numeric" placeholder="Nhập số tiền giảm (VD: 50000)" value={discountInput} onChange={(e) => handleDiscountInput(e.target.value)} className="w-full bg-white border border-amber-200 rounded-xl px-3 py-2.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-amber-400 transition pr-8" />
+                                    {discountAmount > 0 && <button onClick={() => { setDiscountAmount(0); setDiscountInput(""); }} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400"><X size={14} /></button>}
                                 </div>
                                 <div className="flex gap-1.5 flex-wrap">
                                     {[10000, 20000, 50000, 100000].map(preset => (
-                                        <button
-                                            key={preset}
-                                            onClick={() => { setDiscountInput(String(preset)); handleDiscountInput(String(preset)); }}
-                                            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition ${discountAmount === preset
-                                                ? "bg-amber-500 text-white border-amber-500"
-                                                : "bg-white text-amber-700 border-amber-200"
-                                                }`}
-                                        >
-                                            -{formatCurrency(preset)}
-                                        </button>
+                                        <button key={preset} onClick={() => { setDiscountInput(String(preset)); handleDiscountInput(String(preset)); }} className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition ${discountAmount === preset ? "bg-amber-500 text-white border-amber-500 shadow-xs" : "bg-white text-amber-700 border-amber-200"}`}>-{formatCurrency(preset)}</button>
                                     ))}
                                 </div>
-                                {discountAmount > 0 && (
-                                    <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5">
-                                        <CheckCircle size={12} /> Đang giảm {formatCurrency(discountAmount)}
-                                    </div>
-                                )}
+                                {discountAmount > 0 && <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1"><CheckCircle size={12} /> Đang giảm {formatCurrency(discountAmount)}</div>}
                             </div>
 
-                            {/* ── Phương thức thanh toán ── */}
                             <div className="space-y-2">
                                 <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Phương thức thanh toán</div>
                                 <div className="grid grid-cols-3 gap-2">
                                     {PAYMENT_METHODS.map(({ value, label, icon: Icon }) => (
-                                        <button
-                                            key={value}
-                                            onClick={() => setPaymentMethod(value as typeof paymentMethod)}
-                                            className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border text-xs font-semibold transition ${paymentMethod === value
-                                                ? "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200"
-                                                : "bg-white text-slate-600 border-slate-200"
-                                                }`}
-                                        >
-                                            <Icon size={16} />
-                                            {label}
-                                        </button>
+                                        <button key={value} onClick={() => setPaymentMethod(value as typeof paymentMethod)} className={`flex flex-col items-center gap-1 py-2.5 rounded-xl border text-xs font-bold transition ${paymentMethod === value ? "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200" : "bg-white text-slate-600 border-slate-200"}`}><Icon size={16} />{label}</button>
                                     ))}
                                 </div>
                             </div>
 
-                            {/* ── Tổng kết hoá đơn ── */}
-                            <div className="rounded-xl border border-slate-200 bg-white p-3.5 space-y-2">
-                                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Tổng kết</div>
-                                <div className="flex justify-between text-xs text-slate-500">
-                                    <span>Tiền phòng</span>
-                                    <span className="font-medium text-slate-700">{formatCurrency(checkoutModal.roomCharge)}</span>
-                                </div>
-                                <div className="flex justify-between text-xs text-slate-500">
-                                    <span>Dịch vụ</span>
-                                    <span className="font-medium text-slate-700">{formatCurrency(checkoutModal.serviceCharge)}</span>
-                                </div>
-                                {discountAmount > 0 && (
-                                    <div className="flex justify-between text-xs text-emerald-600">
-                                        <span>Giảm giá</span>
-                                        <span className="font-semibold">- {formatCurrency(discountAmount)}</span>
-                                    </div>
-                                )}
-                                <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                                    <span className="text-sm font-bold text-slate-900">Tổng thanh toán</span>
-                                    <span className="text-lg font-extrabold text-emerald-600">{formatCurrency(finalTotal)}</span>
-                                </div>
+                            <div className="rounded-xl border border-slate-200 bg-white p-3.5 space-y-1.5">
+                                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Tổng kết chi phí</div>
+                                <div className="flex justify-between text-xs text-slate-500"><span>Tiền không gian</span><span className="font-medium text-slate-700">{formatCurrency(checkoutModal.roomCharge)}</span></div>
+                                <div className="flex justify-between text-xs text-slate-500"><span>Tiền quầy dịch vụ</span><span className="font-medium text-slate-700">{formatCurrency(checkoutModal.serviceCharge)}</span></div>
+                                {discountAmount > 0 && <div className="flex justify-between text-xs text-emerald-600"><span>Giảm trừ chiết khấu</span><span className="font-semibold">- {formatCurrency(discountAmount)}</span></div>}
+                                <div className="flex justify-between items-center pt-2 border-t border-slate-100 mt-2"><span className="text-xs font-bold text-slate-900">Tổng thanh toán</span><span className="text-base font-extrabold text-emerald-600">{formatCurrency(finalTotal)}</span></div>
                             </div>
                         </div>
 
-                        {/* Footer actions */}
-                        <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex gap-2.5 shrink-0" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}>
-                            <button
-                                onClick={closeCheckoutModal}
-                                className="flex-1 py-3 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-600 transition"
-                            >
-                                Hủy bỏ
-                            </button>
-                            <button
-                                onClick={handleConfirmCheckout}
-                                disabled={checkoutLoading}
-                                className="flex-2 py-3 rounded-xl bg-emerald-600 active:bg-emerald-700 disabled:bg-emerald-400 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm"
-                            >
-                                {checkoutLoading ? (
-                                    <><RefreshCw size={13} className="animate-spin" /> Đang xử lý...</>
-                                ) : (
-                                    <><CheckCircle size={13} /> Xác nhận {formatCurrency(finalTotal)}</>
-                                )}
+                        <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex gap-2.5 shrink-0 sticky bottom-0">
+                            <button onClick={closeCheckoutModal} className="flex-1 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600">Hủy bỏ</button>
+                            <button onClick={handleConfirmCheckout} disabled={checkoutLoading} className="flex-2 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm">
+                                {checkoutLoading ? <><RefreshCw size={13} className="animate-spin" /> Đang tạo hoá đơn...</> : <><CheckCircle size={13} /> Xác nhận {formatCurrency(finalTotal)}</>}
                             </button>
                         </div>
-
                     </div>
                 </div>
             )}
+
         </div>
     );
 }

@@ -1,11 +1,10 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
-import { Calendar, Clock, MapPin, Users, Ticket, HelpCircle, Mail, ChevronDown, Phone, ClipboardList, ArrowLeft } from "lucide-react";
+import { Calendar, Clock, MapPin, Users, Ticket, HelpCircle, Mail, ChevronDown, Phone, ClipboardList, ArrowLeft, X, CheckCircle2, AlertCircle } from "lucide-react";
 import { bookingService } from "@/app/services/bookingService";
 import Image from "next/image";
 import Link from "next/link";
 
-// Hàm tự động sinh danh sách các mốc giờ cách nhau 15 phút (từ 09:00 đến 23:45)
 const generateTimeSlots = () => {
     const slots = [];
     for (let hour = 9; hour <= 23; hour++) {
@@ -19,31 +18,26 @@ const generateTimeSlots = () => {
 };
 
 export default function BookingPage() {
-    // State quản lý chuyển đổi Tab: 'booking' hoặc 'pricelist'
     const [activeTab, setActiveTab] = useState<"booking" | "pricelist">("booking");
 
-    // 1. STATE THÔNG TIN LIÊN LẠC (BỔ SUNG CHO ĐÚNG SCHEMA DATABASE)
     const [customerName, setCustomerName] = useState("");
     const [customerPhone, setCustomerPhone] = useState("");
 
-    // Quản lý State cho Form đặt phòng
     const [branch, setBranch] = useState("Muzic Box Phan Xích Long, Q.Phú Nhuận");
-    const [roomType, setRoomType] = useState("boxS"); // Đồng bộ enum: ['boxS', 'boxM' , 'nintendo']
+    const [roomType, setRoomType] = useState("boxS");
     const [date, setDate] = useState(new Date().toLocaleDateString('sv-SE'));
     const [time, setTime] = useState(`${(new Date().getHours() + 1).toString().padStart(2, '0')}:00`);
     const [duration, setDuration] = useState("60");
 
-    // State quản lý UI thông báo trạng thái gửi API
     const [loading, setLoading] = useState(false);
+    // State message vẫn giữ nguyên cấu trúc cũ của bạn
     const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-    // Trạng thái đóng/mở của Custom Time Picker
     const [isOpenTimePicker, setIsOpenTimePicker] = useState(false);
 
     const timeSlots = generateTimeSlots();
     const timePickerRef = useRef<HTMLDivElement>(null);
 
-    // Xử lý click ra ngoài để đóng Dropdown chọn giờ
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (timePickerRef.current && !timePickerRef.current.contains(event.target as Node)) {
@@ -54,31 +48,16 @@ export default function BookingPage() {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    // Cấu hình dữ liệu giá chuẩn theo đúng Model Mongoose khớp với ảnh "nori-banggia.png"
     const priceMatrix: Record<string, { morning: number; afternoon: number; evening: number }> = {
-        boxS: {
-            morning: 39000,   // Khung sáng (8h - 13h)
-            afternoon: 59000, // Khung chiều (13h - 18h)
-            evening: 79000    // Khung tối (18h - 23h)
-        },
-        boxM: {
-            morning: 59000,
-            afternoon: 79000,
-            evening: 99000
-        },
-        nintendo: {
-            morning: 25000,   // Dựa trên ảnh: 1 tay cầm cố định 25k/1h
-            afternoon: 25000,
-            evening: 25000
-        }
+        boxS: { morning: 39000, afternoon: 59000, evening: 79000 },
+        boxM: { morning: 59000, afternoon: 79000, evening: 99000 },
+        nintendo: { morning: 25000, afternoon: 25000, evening: 25000 }
     };
 
-    // Hàm tính giá tiền tạm tính dựa trên cấu trúc schema mới
     const calculatePrice = () => {
         const hour = parseInt(time.split(":")[0]);
         let timeSlot: "morning" | "afternoon" | "evening" = "evening";
 
-        // Xác định khung giờ dựa vào định nghĩa trong DB: Sáng(8-13), Chiều(13-18), Tối(18-23)
         if (hour >= 8 && hour < 13) {
             timeSlot = "morning";
         } else if (hour >= 13 && hour < 18) {
@@ -87,21 +66,17 @@ export default function BookingPage() {
             timeSlot = "evening";
         }
 
-        // Lấy giá cơ sở theo giờ từ ma trận cấu hình
         const targetRates = priceMatrix[roomType] || priceMatrix["boxS"];
         const ratePerHour = targetRates[timeSlot];
 
-        // Thành tiền = Giá theo giờ * (Số phút / 60)
         const totalPrice = ratePerHour * (parseInt(duration) / 60);
         return totalPrice.toLocaleString("vi-VN");
     };
 
-    // 2. HÀM XỬ LÝ SUBMIT GỬI DỮ LIỆU SANG NODEJS BACKEND
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setMessage(null);
 
-        // Kiểm tra validation dữ liệu cơ bản ở FE
         if (!customerName.trim() || !customerPhone.trim()) {
             setMessage({ type: "error", text: "Vui lòng nhập Tên và Số điện thoại để NORI giữ chỗ nha!" });
             return;
@@ -109,26 +84,23 @@ export default function BookingPage() {
 
         setLoading(true);
         try {
-            // Tính toán endTime dự tính dựa vào duration để khớp dữ liệu lưu trữ
             const [startHour, startMin] = time.split(":").map(Number);
             const totalMinutes = startHour * 60 + startMin + parseInt(duration);
             const endHour = Math.floor(totalMinutes / 60).toString().padStart(2, "0");
             const endMin = (totalMinutes % 60).toString().padStart(2, "0");
             const endTime = `${endHour}:${endMin}`;
 
-            // Gửi dữ liệu qua REST API bằng fetch
             const response = await bookingService.create({
                 customerName,
                 customerPhone,
-                roomType, // Được map sang kiểu dữ liệu 'room' trong DB
+                roomType,
                 bookingDate: date,
                 startTime: time,
                 endTime: endTime
-            })
+            });
 
             if (response) {
                 setMessage({ type: "success", text: "Đặt phòng thành công." });
-                // Reset form sau khi đặt thành công nếu muốn
                 setCustomerName("");
                 setCustomerPhone("");
             } else {
@@ -142,7 +114,6 @@ export default function BookingPage() {
                     text: backendMessage || "Có lỗi xảy ra khi đặt chỗ."
                 });
             } else {
-                // Lỗi kết nối mạng hoặc lỗi hệ thống 
                 setMessage({
                     type: "error",
                     text: "Hệ thống đang gặp lỗi. Bạn đặt lịch qua zalo giúp NORI nha: 0393.713.910"
@@ -155,6 +126,54 @@ export default function BookingPage() {
 
     return (
         <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-4 md:p-8 flex items-center justify-center">
+
+            {/* ================= COMPONENT DIALOG (MODAL) POPUP ================= */}
+            {message && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+                    <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl border border-slate-100 relative animate-in zoom-in-95 duration-200 text-center">
+
+                        {/* Nút đóng góc phải */}
+                        <button
+                            onClick={() => setMessage(null)}
+                            className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 transition"
+                        >
+                            <X size={18} />
+                        </button>
+
+                        {/* Icon trạng thái */}
+                        <div className="flex justify-center mb-4">
+                            {message.type === "success" ? (
+                                <CheckCircle2 size={56} className="text-emerald-500 animate-bounce" />
+                            ) : (
+                                <AlertCircle size={56} className="text-rose-500" />
+                            )}
+                        </div>
+
+                        {/* Tiêu đề */}
+                        <h3 className={`text-xl font-black mb-2 ${message.type === "success" ? "text-emerald-600" : "text-rose-600"}`}>
+                            {message.type === "success" ? "Tuyệt vời!" : "Thông báo"}
+                        </h3>
+
+                        {/* Nội dung tin nhắn */}
+                        <p className="text-slate-600 text-sm font-medium leading-relaxed px-2 mb-6">
+                            {message.text}
+                        </p>
+
+                        {/* Nút xác nhận đóng */}
+                        <button
+                            type="button"
+                            onClick={() => setMessage(null)}
+                            className={`w-full py-3 px-4 font-bold rounded-xl text-sm text-white shadow-md transition active:scale-[0.98] ${message.type === "success"
+                                    ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-100"
+                                    : "bg-rose-600 hover:bg-rose-500 shadow-rose-100"
+                                }`}
+                        >
+                            Đồng ý
+                        </button>
+                    </div>
+                </div>
+            )}
+
             <div className="w-full max-w-5xl bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 animate-in fade-in zoom-in-95 duration-300">
 
                 {/* ================= CỘT TRÁI: BANNER THƯƠNG HIỆU ================= */}
@@ -227,19 +246,12 @@ export default function BookingPage() {
                         </button>
                     </div>
 
-                    {/* Hiển thị thông báo trạng thái của API */}
-                    {message && activeTab === "booking" && (
-                        <div className={`mb-4 p-4 rounded-xl text-sm font-bold ${message.type === "success" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"
-                            }`}>
-                            {message.text}
-                        </div>
-                    )}
+                    {/* Đã xóa đoạn render text thông báo cũ tại đây */}
 
                     {/* NỘI DUNG TAB 1: FORM ĐẶT PHÒNG */}
                     {activeTab === "booking" && (
                         <form onSubmit={handleSubmit} className="space-y-4 flex-1 flex flex-col justify-between">
                             <div className="space-y-4">
-                                {/* Khối thông tin liên hệ */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Tên của bạn</label>
@@ -263,7 +275,6 @@ export default function BookingPage() {
                                     </div>
                                 </div>
 
-                                {/* Chọn Cơ sở */}
                                 <div>
                                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Chi nhánh</label>
                                     <div className="relative">
@@ -279,7 +290,6 @@ export default function BookingPage() {
                                     </div>
                                 </div>
 
-                                {/* Chọn Loại Phòng */}
                                 <div>
                                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Chọn dịch vụ</label>
                                     <div className="relative">
@@ -297,7 +307,6 @@ export default function BookingPage() {
                                     </div>
                                 </div>
 
-                                {/* Chọn Ngày & Giờ/Thời lượng */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Chọn ngày</label>
@@ -366,7 +375,6 @@ export default function BookingPage() {
                                 </div>
                             </div>
 
-                            {/* Thanh toán và Submit nút */}
                             <div className="mt-8 pt-5 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
                                 <div className="text-center sm:text-left">
                                     <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Số tiền cần thanh toán (Tạm tính)</p>
@@ -385,7 +393,7 @@ export default function BookingPage() {
                         </form>
                     )}
 
-                    {/* NỘI DUNG TAB 2: BẢNG GIÁ ẢNH NGAU */}
+                    {/* NỘI DUNG TAB 2: BẢNG GIÁ */}
                     {activeTab === "pricelist" && (
                         <div className="space-y-4 flex-1 flex flex-col justify-between animate-in fade-in duration-200">
                             <div className="w-full overflow-hidden border border-slate-100 rounded-xl bg-slate-50 p-2 flex items-center justify-center">
