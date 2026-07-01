@@ -2,12 +2,13 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Settings, ReceiptText, Menu, LogOut } from 'lucide-react';
+import { LayoutDashboard, ReceiptText, Menu, LogOut } from 'lucide-react';
+import { authService } from '@/app/services/authService';
 
 function Sidebar() {
     const pathname = usePathname();
     const router = useRouter();
-    const [userRole, setUserRole] = useState(null);
+    const [userRole, setUserRole] = useState<string | null>(null);
 
     useEffect(() => {
         const storedUser = localStorage.getItem('nori_auth_user');
@@ -37,7 +38,7 @@ function Sidebar() {
     });
 
     return (
-        <div className="flex flex-col justify-between h-[calc(100vh-77px)] p-4">
+        <div className="flex flex-col justify-between h-full lg:h-[calc(100vh-77px)] p-4">
             {/* Khung chứa các Menu Items */}
             <nav className="flex flex-col gap-1.5">
                 {filteredMenuItems.map(({ icon, label, href }) => {
@@ -70,7 +71,7 @@ function Sidebar() {
             <div className="pt-4 border-t border-slate-100">
                 <button
                     onClick={() => {
-                        // authService.logout(); 
+                        authService.logout();
                         router.replace("/admin/login");
                     }}
                     className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium text-rose-600 hover:bg-rose-50/60 hover:text-rose-700 transition-all duration-150 cursor-pointer group"

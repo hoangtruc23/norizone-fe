@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const apiClient = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_URL || 'https://manage.tiemmayanhmili.vn/miframe/api',
+    baseURL: process.env.NEXT_PUBLIC_API_URL || 'https://norizone.com.vn/api',
     timeout: 10000, // 10 giây
     headers: {
         'Content-Type': 'application/json',
@@ -33,7 +33,7 @@ apiClient.interceptors.response.use(
         // Xử lý lỗi tập trung (Ví dụ: 401 thì bắt Logout)
         if (error.response?.status === 401) {
             console.error("Phiên đăng nhập hết hạn!");
-            window.location.href = '/login';
+            window.location.href = '/admin/login';
         }
         return Promise.reject(error);
     }

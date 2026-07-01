@@ -16,8 +16,8 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "NORI ZONE - Kiến Trúc Thượng Lưu",
-  description: "Thiết kế vượt thời gian hòa quyện cùng phong cách sống luxury.",
+  title: "NORI ZONE - Good Vibes Only.",
+  description: "Không gian giải trí cho gen Z.",
 };
 
 export default function RootLayout({
